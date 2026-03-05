@@ -12,4 +12,14 @@ migrations_dir = "migrations"
 [[rules]]
 type = "Text"
 globs = ["**/*.html"]
-fallbacks = true
+fallthrough = true
+
+[[rules]]
+type = "Text"
+globs = ["src/api/dist/assets/*.js"]
+fallthrough = true
+
+[[rules]]
+type = "Text"
+globs = ["src/api/dist/assets/*.css"]
+fallthrough = false

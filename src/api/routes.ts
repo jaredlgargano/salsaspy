@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { ApiEnv } from "./index";
 import { generateCsvForMonth } from "./exportCsv";
 import { recomputeAggregatesForDate } from "./aggregate";
-import dashboardHtml from "./dashboard.html";
+import dashboardHtml from "./dist/index.html";
 import { normalizeBrand, isKnownBrand } from "../shared/normalize";
 import { recordUnknownBrand } from "../shared/db";
 
