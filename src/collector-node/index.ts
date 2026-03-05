@@ -12,8 +12,8 @@ async function start() {
     console.log("Starting Node.js Playwright Collector...");
 
     // In a real cron environment, we'd determine shard dynamically.
-    // For testing, we'll run a single pass over all markets (shard = -1).
-    const shard = -1;
+    // We can pass process.env.SHARD to run a specific shard partition.
+    const shard = process.env.SHARD ? parseInt(process.env.SHARD, 10) : -1;
     const now = new Date();
     const runId = `node-cron-${now.getTime()}`;
 
