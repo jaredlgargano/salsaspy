@@ -1,0 +1,71 @@
+.table-container {
+    width: 100%;
+    overflow-x: auto;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 0.75rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+    min-width: 600px;
+}
+
+th,
+td {
+    padding: 0.75rem 1rem;
+    text-align: center;
+    border-bottom: 1px solid rgba(63, 63, 70, 0.3);
+    border-right: 1px solid rgba(63, 63, 70, 0.3);
+}
+
+th:last-child,
+td:last-child {
+    border-right: none;
+}
+
+thead th {
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-main);
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.sticky-col {
+    position: sticky;
+    left: 0;
+    background: var(--bg-card);
+    z-index: 5;
+    text-align: left;
+    border-right: 1px solid var(--border-color);
+}
+
+thead .sticky-col {
+    z-index: 11;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.brand-col {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 500;
+    color: var(--text-main);
+}
+
+.brand-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+/* YipitData inspired conditional formatting */
+tbody tr:last-child td {
+    border-bottom: none;
+}

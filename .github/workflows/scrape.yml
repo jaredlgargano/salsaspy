@@ -1,0 +1,35 @@
+name: Run DoorDash Playwright Scraper
+
+on:
+  schedule:
+    # Run every hour, or adjust to your preference.
+    # Ex: '0 * * * *' (Every hour at minute 0)
+    # Ex: '*/15 * * * *' (Every 15 minutes)
+    - cron: '30 * * * *' 
+  workflow_dispatch: # Allows you to manually trigger from GitHub Actions UI
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Scraper
+        env:
+          # These must be set in your GitHub Repository Secrets
+          API_URL: ${{ secrets.API_URL }}
+          API_KEY: ${{ secrets.API_KEY }}
+        run: npm run scrape
