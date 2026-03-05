@@ -60,11 +60,11 @@ function App() {
           baseParams += `category=${selectedCategory}`;
         }
 
-        const sm = startDate ? `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}` : '';
-        const em = endDate ? `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}` : '';
+        const sm = startDate ? `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')}` : '';
+        const em = endDate ? `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}` : '';
 
-        if (sm) baseParams += `&start_month=${sm}`;
-        if (em) baseParams += `&end_month=${em}`;
+        if (sm) baseParams += `&start_date=${sm}`;
+        if (em) baseParams += `&end_date=${em}`;
 
         // Fetch Average Minimum Rank
         const rankRes = await fetch(`${API_BASE}/v1/aggregates/time-series?metric_name=avg_min_rank&${baseParams}`);

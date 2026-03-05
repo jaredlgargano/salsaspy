@@ -232,6 +232,12 @@ export function setupRoutes(app: Hono<{ Bindings: ApiEnv }>) {
             if (batch.length > 0) {
                 await c.env.DB.batch(batch);
             }
+
+            // Auto-recompute aggregates for this date in the background
+            const dateToRecompute = body.run?.started_at
+                ? body.run.started_at.slice(0, 10)
+                : new Date().toISOString().slice(0, 10);
+            c.executionCtx.waitUntil(recomputeAggregatesForDate(c.env.DB, dateToRecompute));
         }
 
         return c.json({ success: true, ingested: body.observations?.length || 0 });
