@@ -45,7 +45,7 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
     });
 
     console.log(`Found ${myMarkets.length} markets for shard ${manualShard} at local 12:00 PM`);
-    if (myMarkets.length === 0) return;
+    // Removed early return; we always want to report a run status to the API
 
     // No proxy APIs required, Cloudflare is natively bypassed
 

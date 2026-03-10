@@ -32,11 +32,27 @@ function App() {
 
   // UI Controls
   const [selectedCategory, setSelectedCategory] = useState<string>('Mexican');
+  const [selectedBrand, setSelectedBrand] = useState<string>('All');
+  const [aggregationInterval, setAggregationInterval] = useState<string>('day');
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
 
-  // Competitors that appear in the data to build dynamic lines/bars
+  // Competitors and filter options
+  const [availableBrands, setAvailableBrands] = useState<string[]>([]);
   const [activeBrands, setActiveBrands] = useState<string[]>([]);
+
+  useEffect(() => {
+    const fetchAvailableBrands = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/v1/brands`);
+        const data = await res.json();
+        setAvailableBrands(data.brands || []);
+      } catch (err) {
+        console.error("Failed to fetch brands list:", err);
+      }
+    };
+    fetchAvailableBrands();
+  }, []);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -58,6 +74,11 @@ function App() {
           baseParams += `category=None&surface=bestOfLunch`;
         } else {
           baseParams += `category=${selectedCategory}`;
+        }
+
+        baseParams += `&interval=${aggregationInterval}`;
+        if (selectedBrand !== 'All') {
+          baseParams += `&brand=${encodeURIComponent(selectedBrand)}`;
         }
 
         const sm = startDate ? `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')}` : '';
@@ -98,9 +119,9 @@ function App() {
 
     fetchStats();
     fetchCharts();
-    const interval = setInterval(() => { fetchStats(); fetchCharts(); }, 15000); // Polling every 15s
+    const interval = setInterval(() => { fetchStats(); fetchCharts(); }, 15000);
     return () => clearInterval(interval);
-  }, [selectedCategory, startDate, endDate]); // Re-fetch charts if controls change
+  }, [selectedCategory, selectedBrand, aggregationInterval, startDate, endDate]);
 
   const formatTime = (isoString: string | null) => {
     if (!isoString) return 'Never';
@@ -196,7 +217,27 @@ function App() {
             <option value="Salad">Salad</option>
             <option value="Chicken">Chicken</option>
             <option value="BestOfLunch">Best of Lunch</option>
-            <option value="">All Categories</option>
+            <option value="All Categories">All Categories</option>
+          </select>
+        </div>
+
+        <div>
+          <label>Restaurant: </label>
+          <select value={selectedBrand} onChange={(e) => setSelectedBrand(e.target.value)} className="category-select">
+            <option value="All">All Restaurants</option>
+            {availableBrands.map(b => (
+              <option key={b} value={b}>{b}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label>Aggregate: </label>
+          <select value={aggregationInterval} onChange={(e) => setAggregationInterval(e.target.value)} className="category-select">
+            <option value="day">Daily</option>
+            <option value="week">Weekly</option>
+            <option value="month">Monthly</option>
+            <option value="year">Yearly</option>
           </select>
         </div>
 

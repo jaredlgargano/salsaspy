@@ -39,6 +39,7 @@ jobs:
           # These must be set in your GitHub Repository Secrets
           API_URL: ${{ secrets.API_URL }}
           API_KEY: ${{ secrets.API_KEY }}
+          RUN_ID: ${{ github.run_id }}
           SHARD: ${{ matrix.shard }}
           SHARDS_TOTAL: 100
         run: npm run scrape

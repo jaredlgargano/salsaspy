@@ -1,5 +1,3 @@
-import { launchBrowser } from "./browser";
-import { pushToApi } from "./ingest";
 import { runShard } from "./runner";
 import dotenv from "dotenv";
 
@@ -15,9 +13,13 @@ async function start() {
     // We can pass process.env.SHARD to run a specific shard partition.
     const shard = process.env.SHARD ? parseInt(process.env.SHARD, 10) : -1;
     const now = new Date();
-    const runId = `node-cron-${now.getTime()}`;
+    
+    // Use GitHub Run ID if available, otherwise fallback to timestamp
+    const baseRunId = process.env.RUN_ID || `manual-${now.getTime()}`;
+    const runId = shard !== -1 ? `${baseRunId}-${shard}` : baseRunId;
 
     console.log(`Run ID: ${runId}`);
+    console.log(`Base Run ID for grouping: ${baseRunId}`);
 
     await runShard(API_URL, API_KEY, now, runId, shard);
 

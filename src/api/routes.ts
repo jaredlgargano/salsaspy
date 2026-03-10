@@ -18,22 +18,63 @@ export function setupRoutes(app: Hono<{ Bindings: ApiEnv }>) {
 
     // Dashboard Status API
     app.get("/v1/status", async (c) => {
-        const lastRun = await c.env.DB.prepare("SELECT started_at, status FROM runs ORDER BY started_at DESC LIMIT 1").first();
+        // Find recent runs to identify the latest major execution
+        const recentRuns = await c.env.DB.prepare(
+            "SELECT run_id, status, started_at FROM runs ORDER BY started_at DESC LIMIT 200"
+        ).all();
+
         const activeMarkets = await c.env.DB.prepare("SELECT COUNT(*) as count FROM markets WHERE active = 1").first();
         const totalObs = await c.env.DB.prepare("SELECT COUNT(*) as count FROM observations").first();
 
-        // Calculate next run assuming top of the hour execution
+        if (!recentRuns.results || recentRuns.results.length === 0) {
+            return c.json({
+                health: 'Unknown',
+                status: 'UNKNOWN',
+                activeMarkets: activeMarkets?.count || 0,
+                totalObservations: totalObs?.count || 0
+            });
+        }
+
+        // Group by base run ID (everything before the last dash if it ends in a number)
+        const groups: Record<string, { shards: any[], latestStarted: string }> = {};
+        for (const r of recentRuns.results as any[]) {
+            const parts = r.run_id.split('-');
+            const lastPart = parts[parts.length - 1];
+            const isShard = parts.length > 1 && /^\d+$/.test(lastPart);
+            const baseId = isShard ? parts.slice(0, -1).join('-') : r.run_id;
+
+            if (!groups[baseId]) {
+                groups[baseId] = { shards: [], latestStarted: r.started_at };
+            }
+            groups[baseId].shards.push(r);
+        }
+
+        // Find the absolute latest group
+        const sortedBaseIds = Object.keys(groups).sort((a, b) => 
+            groups[b].latestStarted.localeCompare(groups[a].latestStarted)
+        );
+        const latestBaseId = sortedBaseIds[0];
+        const latestGroup = groups[latestBaseId];
+
+        // Health: SUCCESS only if NO shards failed/partial and at least one shard reported success
+        const hasFailure = latestGroup.shards.some(s => s.status === 'FAILED' || s.status === 'PARTIAL');
+        const anySuccess = latestGroup.shards.some(s => s.status === 'SUCCESS');
+        
+        // Calculate next run assuming top of the hour execution (minute 30 as per scrape.yml)
         const now = new Date();
         const nextRun = new Date(now);
-        nextRun.setHours(now.getHours() + 1, 0, 0, 0);
+        nextRun.setMinutes(30, 0, 0);
+        if (nextRun <= now) nextRun.setHours(now.getHours() + 1);
 
         return c.json({
-            lastRunTime: lastRun?.started_at || null,
+            lastRunTime: latestGroup.latestStarted,
             nextRunTime: nextRun.toISOString(),
             activeMarkets: activeMarkets?.count || 0,
             totalObservations: totalObs?.count || 0,
-            health: lastRun?.status === 'SUCCESS' ? 'Healthy' : (lastRun ? 'Issues detected' : 'Unknown'),
-            status: lastRun?.status || 'UNKNOWN'
+            health: (anySuccess && !hasFailure) ? 'Healthy' : 'Issues detected',
+            status: hasFailure ? 'PARTIAL_FAILURE' : (anySuccess ? 'SUCCESS' : 'PENDING'),
+            shardCount: latestGroup.shards.length,
+            baseRunId: latestBaseId
         });
     });
 
@@ -57,6 +98,12 @@ export function setupRoutes(app: Hono<{ Bindings: ApiEnv }>) {
         const query = `SELECT * FROM runs ORDER BY started_at DESC LIMIT ?`;
         const result = await c.env.DB.prepare(query).bind(limit).all();
         return c.json({ runs: result.results || [] });
+    });
+
+    // Brands
+    app.get("/v1/brands", async (c) => {
+        const result = await c.env.DB.prepare("SELECT DISTINCT brand_normalized FROM aggregates_daily ORDER BY brand_normalized ASC").all();
+        return c.json({ brands: result.results?.map((r: any) => r.brand_normalized) || [] });
     });
 
     // Aggregates Monthly
@@ -94,13 +141,51 @@ export function setupRoutes(app: Hono<{ Bindings: ApiEnv }>) {
         const metric_name = c.req.query("metric_name");
         if (!metric_name) return c.json({ error: "Missing metric_name parameter" }, 400);
 
+        const brand = c.req.query("brand");
+        const interval = c.req.query("interval") || "day";
+
         // Map the requested UI metric to the actual D1 column
         let columnToSelect = "avg_min_rank";
         if (metric_name === "sponsored_share") columnToSelect = "sponsored_share";
         if (metric_name === "discount_store_share") columnToSelect = "discount_store_share";
 
-        let query = `SELECT date, brand_normalized, ${columnToSelect} as metric_value FROM aggregates_daily WHERE 1=1`;
+        // Define time period grouping SQL
+        let periodSql = "date"; // default for day
+        if (interval === "week") {
+            periodSql = "DATE(date, 'weekday 0', '-6 days')";
+        } else if (interval === "month") {
+            periodSql = "strftime('%Y-%m', date) || '-01'";
+        } else if (interval === "year") {
+            periodSql = "strftime('%Y', date) || '-01-01'";
+        }
+
+        let query = `
+            SELECT 
+                ${periodSql} as period, 
+                brand_normalized, 
+                SUM(avg_min_rank * total_observations) / SUM(total_observations) as metric_value
+            FROM aggregates_daily 
+            WHERE 1=1
+        `;
+
+        // If specific metric requested (other than default avg_min_rank which is used in weight)
+        if (columnToSelect !== "avg_min_rank") {
+            query = `
+                SELECT 
+                    ${periodSql} as period, 
+                    brand_normalized, 
+                    SUM(${columnToSelect} * total_observations) / SUM(total_observations) as metric_value
+                FROM aggregates_daily 
+                WHERE 1=1
+            `;
+        }
+
         const params: any[] = [];
+
+        if (brand && brand !== "All") {
+            query += ` AND brand_normalized = ?`;
+            params.push(brand);
+        }
 
         const surface = c.req.query("surface");
         if (surface) {
@@ -109,7 +194,7 @@ export function setupRoutes(app: Hono<{ Bindings: ApiEnv }>) {
         }
 
         const category = c.req.query("category");
-        if (category && category !== "None") {
+        if (category && category !== "None" && category !== "All Categories") {
             query += ` AND category = ?`;
             params.push(category);
         } else if (category === "None") {
@@ -128,13 +213,13 @@ export function setupRoutes(app: Hono<{ Bindings: ApiEnv }>) {
             params.push(end_date);
         }
 
-        query += ` ORDER BY date ASC`;
+        query += ` GROUP BY period, brand_normalized ORDER BY period ASC`;
         const result = await c.env.DB.prepare(query).bind(...params).all();
 
         // Shape data for Recharts: [{ date: '2024-03-01', Chipotle: 2.4, Burger King: 7.0 }]
         const timeGrouped: Record<string, any> = {};
         for (const row of result.results || []) {
-            const d = row.date as string;
+            const d = row.period as string;
             const b = row.brand_normalized as string;
             if (!timeGrouped[d]) timeGrouped[d] = { date: d };
             timeGrouped[d][b] = row.metric_value;
