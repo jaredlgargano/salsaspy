@@ -214,14 +214,16 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
         });
     }
 
-    console.log(`Executing ${requestQueue.length} scraper requests sequentially...`);
-    for (let i = 0; i < requestQueue.length; i++) {
-        await requestQueue[i]();
-        console.log(` -> Completed request ${i + 1}/${requestQueue.length}`);
+    console.log(`Executing ${requestQueue.length} scraper requests in parallel batches (size 5)...`);
+    const BATCH_SIZE = 5;
+    for (let i = 0; i < requestQueue.length; i += BATCH_SIZE) {
+        const batch = requestQueue.slice(i, i + BATCH_SIZE);
+        console.log(` -> Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(requestQueue.length / BATCH_SIZE)} (${batch.length} requests)`);
+        await Promise.all(batch.map(fn => fn()));
 
-        // Sleep to avoid blowing rate limits
-        if (i + 1 < requestQueue.length) {
-            await new Promise(resolve => setTimeout(resolve, 3000));
+        // Brief pause between batches to be respectful
+        if (i + BATCH_SIZE < requestQueue.length) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
         }
     }
 
