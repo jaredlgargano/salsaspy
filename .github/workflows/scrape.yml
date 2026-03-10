@@ -2,9 +2,8 @@ name: Run DoorDash Playwright Scraper
 
 on:
   schedule:
-    # Run every 2 hours at minute 30.
-    # Spreading it out to allow all 100 shards to finish comfortably within the 20-runner limit.
-    - cron: '30 */2 * * *'
+    # Run every hour at minute 30.
+    - cron: '30 * * * *'
   workflow_dispatch:
 
 concurrency:
@@ -41,4 +40,5 @@ jobs:
           API_URL: ${{ secrets.API_URL }}
           API_KEY: ${{ secrets.API_KEY }}
           SHARD: ${{ matrix.shard }}
+          SHARDS_TOTAL: 100
         run: npm run scrape

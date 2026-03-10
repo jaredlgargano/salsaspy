@@ -33,7 +33,7 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
     const marketsData: any = await marketsRes.json();
     const allMarkets = marketsData.markets || [];
 
-    const SHARDS_TOTAL = 20;
+    const SHARDS_TOTAL = parseInt(process.env.SHARDS_TOTAL || "100");
     const myMarkets = allMarkets.filter((m: any) => {
         if (manualShard !== -1 && getShard(m.market_id, SHARDS_TOTAL) !== manualShard) return false;
 
@@ -41,7 +41,7 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
         const tz = STATE_TZ[m.state] || 'America/New_York';
         const localHour = parseInt(new Intl.DateTimeFormat('en-US', { hour: 'numeric', hour12: false, timeZone: tz }).format(now));
 
-        return true; // Bypass 12PM strict restriction for manual local hydrate run
+        return localHour === 12; // Only scrape during the 12:00 PM local hour
     });
 
     console.log(`Found ${myMarkets.length} markets for shard ${manualShard} at local 12:00 PM`);
