@@ -35,13 +35,16 @@ export function setupRoutes(app: Hono<{ Bindings: ApiEnv }>) {
             });
         }
 
-        // Group by base run ID (everything before the last dash if it ends in a number)
+        // Group by base run ID
         const groups: Record<string, { shards: any[], latestStarted: string }> = {};
         for (const r of recentRuns.results as any[]) {
             const parts = r.run_id.split('-');
             const lastPart = parts[parts.length - 1];
-            const isShard = parts.length > 1 && /^\d+$/.test(lastPart);
-            const baseId = isShard ? parts.slice(0, -1).join('-') : r.run_id;
+            
+            // It's a shard if the last part is a small number (0-999)
+            // Legacy node-cron runs used 13-digit timestamps, which we shouldn't treat as shard indices
+            const isShardIndex = /^\d+$/.test(lastPart) && lastPart.length < 4;
+            const baseId = isShardIndex ? parts.slice(0, -1).join('-') : r.run_id;
 
             if (!groups[baseId]) {
                 groups[baseId] = { shards: [], latestStarted: r.started_at };
@@ -183,8 +186,15 @@ export function setupRoutes(app: Hono<{ Bindings: ApiEnv }>) {
         const params: any[] = [];
 
         if (brand && brand !== "All") {
-            query += ` AND brand_normalized = ?`;
-            params.push(brand);
+            const brandList = brand.split(',');
+            if (brandList.length === 1) {
+                query += ` AND brand_normalized = ?`;
+                params.push(brandList[0]);
+            } else {
+                const placeholders = brandList.map(() => '?').join(',');
+                query += ` AND brand_normalized IN (${placeholders})`;
+                params.push(...brandList);
+            }
         }
 
         const surface = c.req.query("surface");

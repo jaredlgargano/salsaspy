@@ -32,7 +32,9 @@ function App() {
 
   // UI Controls
   const [selectedCategory, setSelectedCategory] = useState<string>('Mexican');
-  const [selectedBrand, setSelectedBrand] = useState<string>('All');
+  const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
+  const [brandSearchQuery, setBrandSearchQuery] = useState<string>('');
+  const [dropdownOpen, setDropdownOpen] = useState<boolean>(false);
   const [aggregationInterval, setAggregationInterval] = useState<string>('day');
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
@@ -77,8 +79,8 @@ function App() {
         }
 
         baseParams += `&interval=${aggregationInterval}`;
-        if (selectedBrand !== 'All') {
-          baseParams += `&brand=${encodeURIComponent(selectedBrand)}`;
+        if (selectedBrands.length > 0) {
+          baseParams += `&brand=${encodeURIComponent(selectedBrands.join(','))}`;
         }
 
         const sm = startDate ? `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')}` : '';
@@ -121,7 +123,17 @@ function App() {
     fetchCharts();
     const interval = setInterval(() => { fetchStats(); fetchCharts(); }, 15000);
     return () => clearInterval(interval);
-  }, [selectedCategory, selectedBrand, aggregationInterval, startDate, endDate]);
+  }, [selectedCategory, selectedBrands, aggregationInterval, startDate, endDate]);
+
+  const handleBrandToggle = (brand: string) => {
+    setSelectedBrands(prev => 
+      prev.includes(brand) ? prev.filter(b => b !== brand) : [...prev, brand]
+    );
+  };
+
+  const filteredBrandsList = availableBrands.filter(b => 
+    b.toLowerCase().includes(brandSearchQuery.toLowerCase())
+  );
 
   const formatTime = (isoString: string | null) => {
     if (!isoString) return 'Never';
@@ -221,14 +233,38 @@ function App() {
           </select>
         </div>
 
-        <div>
-          <label>Restaurant: </label>
-          <select value={selectedBrand} onChange={(e) => setSelectedBrand(e.target.value)} className="category-select">
-            <option value="All">All Restaurants</option>
-            {availableBrands.map(b => (
-              <option key={b} value={b}>{b}</option>
-            ))}
-          </select>
+        <div className="dropdown-container">
+          <label>Restaurants: </label>
+          <div className="dropdown-header" onClick={() => setDropdownOpen(!dropdownOpen)}>
+            {selectedBrands.length === 0 ? 'All Restaurants' : `${selectedBrands.length} Selected`}
+          </div>
+          {dropdownOpen && (
+            <div className="dropdown-menu">
+              <div className="dropdown-actions">
+                <button className="btn-small" onClick={() => setSelectedBrands([])}>Clear All</button>
+                <button className="btn-small" onClick={() => setSelectedBrands([...availableBrands])}>Select All</button>
+              </div>
+              <input 
+                type="text" 
+                className="dropdown-search" 
+                placeholder="Search restaurants..." 
+                value={brandSearchQuery}
+                onChange={(e) => setBrandSearchQuery(e.target.value)}
+                autoFocus
+              />
+              {filteredBrandsList.map(b => (
+                <div key={b} className="dropdown-item" onClick={() => handleBrandToggle(b)}>
+                  <input 
+                    type="checkbox" 
+                    className="dropdown-checkbox" 
+                    checked={selectedBrands.includes(b)}
+                    readOnly
+                  />
+                  <span>{b}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div>
