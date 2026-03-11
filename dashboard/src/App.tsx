@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Activity, Clock, Database, MapPin, ServerCrash, BarChart2, TrendingDown } from 'lucide-react';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
@@ -125,15 +125,33 @@ function App() {
     return () => clearInterval(interval);
   }, [selectedCategory, selectedBrands, aggregationInterval, startDate, endDate]);
 
-  const handleBrandToggle = (brand: string) => {
-    setSelectedBrands(prev => 
+  const handleBrandToggle = useCallback((brand: string) => {
+    setSelectedBrands(prev =>
       prev.includes(brand) ? prev.filter(b => b !== brand) : [...prev, brand]
     );
-  };
+  }, []);
 
-  const filteredBrandsList = availableBrands.filter(b => 
-    b.toLowerCase().includes(brandSearchQuery.toLowerCase())
-  );
+  // O(1) lookup Set instead of O(n) Array.includes on every render
+  const selectedBrandsSet = useMemo(() => new Set(selectedBrands), [selectedBrands]);
+
+  // Debounced search: only filter after user stops typing for 150ms
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setBrandSearchQuery(val);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => setDebouncedSearch(val), 150);
+  }, []);
+
+  // Cap at 100 visible items to avoid rendering thousands of DOM nodes
+  const MAX_VISIBLE = 100;
+  const filteredBrandsList = useMemo(() => {
+    const q = debouncedSearch.toLowerCase();
+    return availableBrands.filter(b => b.toLowerCase().includes(q));
+  }, [availableBrands, debouncedSearch]);
+  const visibleBrandsList = filteredBrandsList.slice(0, MAX_VISIBLE);
+  const hiddenCount = filteredBrandsList.length - visibleBrandsList.length;
 
   const formatTime = (isoString: string | null) => {
     if (!isoString) return 'Never';
@@ -249,20 +267,25 @@ function App() {
                 className="dropdown-search" 
                 placeholder="Search restaurants..." 
                 value={brandSearchQuery}
-                onChange={(e) => setBrandSearchQuery(e.target.value)}
+                onChange={handleSearchChange}
                 autoFocus
               />
-              {filteredBrandsList.map(b => (
+              {visibleBrandsList.map(b => (
                 <div key={b} className="dropdown-item" onClick={() => handleBrandToggle(b)}>
                   <input 
                     type="checkbox" 
                     className="dropdown-checkbox" 
-                    checked={selectedBrands.includes(b)}
+                    checked={selectedBrandsSet.has(b)}
                     readOnly
                   />
                   <span>{b}</span>
                 </div>
               ))}
+              {hiddenCount > 0 && (
+                <div className="dropdown-item" style={{ color: '#64748b', fontSize: '0.75rem', pointerEvents: 'none' }}>
+                  + {hiddenCount} more — type to narrow search
+                </div>
+              )}
             </div>
           )}
         </div>
