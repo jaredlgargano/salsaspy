@@ -2,6 +2,7 @@ import { pushToApi } from "./ingest";
 import { parseListings } from "./parseListings";
 import { getShard } from "../shared/hash";
 import { getNextCookies, markBanned, getAccountCount } from "./cookieRotator";
+import { HttpsProxyAgent } from "https-proxy-agent";
 
 const STATE_TZ: Record<string, string> = {
     'AL': 'America/Chicago', 'AK': 'America/Anchorage', 'AZ': 'America/Phoenix', 'AR': 'America/Chicago',
@@ -26,6 +27,8 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
     const { gotScraping } = await import('got-scraping');
 
     const SHARDS_TOTAL = parseInt(process.env.SHARDS_TOTAL || "100");
+    const proxyUrl = process.env.PROXY_URL;
+    const agent = proxyUrl ? new HttpsProxyAgent(proxyUrl) : undefined;
 
     // 1. Fetch Markets
     const marketRes = await fetch(`${apiUrl}/v1/markets?shard=${manualShard}&shards_total=${SHARDS_TOTAL}&active=1`, {
@@ -107,6 +110,7 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                             url: url,
                             headerGeneratorOptions: { browsers: ['chrome'], os: ['macos'] },
                             headers,
+                            agent: agent ? { https: agent, http: agent } : undefined,
                             timeout: { request: 30000 }
                         });
 
@@ -177,8 +181,14 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                             lastFailureReason = e.message;
                             console.log(` -> Navigation error in ${market.city} (${categoryName}) after 3 attempts: ${e.message}`);
                         } else {
-                            console.log(` -> Timeout/Error in ${market.city} (${categoryName}): ${e.message} (Attempt ${attempts}/3). Retrying...`);
-                            await new Promise(r => setTimeout(r, 3000)); // Sleep before retry
+                            let sleepTime = 3000;
+                            if (e.message.includes('429')) {
+                                sleepTime = 5000 * attempts;
+                                console.log(` -> Rate limited (429) in ${market.city} (${categoryName}). Sleeping for ${sleepTime}ms...`);
+                            } else {
+                                console.log(` -> Timeout/Error in ${market.city} (${categoryName}): ${e.message} (Attempt ${attempts}/3). Retrying...`);
+                            }
+                            await new Promise(r => setTimeout(r, sleepTime)); // Sleep before retry
                         }
                     }
                 }
@@ -197,6 +207,7 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                     const res = await gotScraping({
                         url: lunchUrl,
                         headerGeneratorOptions: { browsers: ['chrome'], os: ['macos'] },
+                        agent: agent ? { https: agent, http: agent } : undefined,
                         timeout: { request: 30000 }
                     });
 
@@ -248,16 +259,22 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                         lastFailureReason = e.message;
                         console.log(` -> Navigation error in ${market.city} (Best of Lunch) after 3 attempts: ${e.message}`);
                     } else {
-                        console.log(` -> Timeout/Error in ${market.city} (Best of Lunch): ${e.message} (Attempt ${attempts}/3). Retrying...`);
-                        await new Promise(r => setTimeout(r, 3000));
+                        let sleepTime = 3000;
+                        if (e.message.includes('429')) {
+                            sleepTime = 5000 * attempts;
+                            console.log(` -> Rate limited (429) in ${market.city} (Best of Lunch). Sleeping for ${sleepTime}ms...`);
+                        } else {
+                            console.log(` -> Timeout/Error in ${market.city} (Best of Lunch): ${e.message} (Attempt ${attempts}/3). Retrying...`);
+                        }
+                        await new Promise(r => setTimeout(r, sleepTime));
                     }
                 }
             }
         });
     }
 
-    console.log(`Executing ${requestQueue.length} scraper requests in parallel batches (size 5)...`);
-    const BATCH_SIZE = 5;
+    console.log(`Executing ${requestQueue.length} scraper requests in parallel batches (size 2)...`);
+    const BATCH_SIZE = 2;
     for (let i = 0; i < requestQueue.length; i += BATCH_SIZE) {
         const batch = requestQueue.slice(i, i + BATCH_SIZE);
         console.log(` -> Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(requestQueue.length / BATCH_SIZE)} (${batch.length} requests)`);
@@ -265,7 +282,7 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
 
         // Brief pause between batches to be respectful
         if (i + BATCH_SIZE < requestQueue.length) {
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            await new Promise(resolve => setTimeout(resolve, 3000));
         }
     }
 
