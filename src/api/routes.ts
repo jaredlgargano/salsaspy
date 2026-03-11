@@ -61,8 +61,25 @@ export function setupRoutes(app: Hono<{ Bindings: ApiEnv }>) {
 
         // Health: SUCCESS only if NO shards failed/partial and at least one shard reported success
         const hasFailure = latestGroup.shards.some(s => s.status === 'FAILED' || s.status === 'PARTIAL');
-        const anySuccess = latestGroup.shards.some(s => s.status === 'SUCCESS');
+        const anySuccess = latestGroup.shards.some(s => s.status === 'SUCCESS' || s.status === 'PARTIAL');
         
+        let healthText = 'Healthy';
+        if (hasFailure) {
+            const issues = Array.from(new Set(
+                latestGroup.shards
+                    .filter(s => s.status === 'FAILED' || s.status === 'PARTIAL')
+                    .map(s => s.failure_reason)
+                    .filter(Boolean)
+            ));
+            if (issues.length > 0) {
+                healthText = `Issues: ${issues.join(', ')}`;
+            } else {
+                healthText = 'Issues detected (Unknown root cause)';
+            }
+        } else if (!anySuccess) {
+            healthText = 'No successful runs recently';
+        }
+
         // Calculate next run assuming top of the hour execution (minute 30 as per scrape.yml)
         const now = new Date();
         const nextRun = new Date(now);
@@ -74,7 +91,7 @@ export function setupRoutes(app: Hono<{ Bindings: ApiEnv }>) {
             nextRunTime: nextRun.toISOString(),
             activeMarkets: activeMarkets?.count || 0,
             totalObservations: totalObs?.count || 0,
-            health: (anySuccess && !hasFailure) ? 'Healthy' : 'Issues detected',
+            health: healthText,
             status: hasFailure ? 'PARTIAL_FAILURE' : (anySuccess ? 'SUCCESS' : 'PENDING'),
             shardCount: latestGroup.shards.length,
             baseRunId: latestBaseId
@@ -84,12 +101,33 @@ export function setupRoutes(app: Hono<{ Bindings: ApiEnv }>) {
     // Markets
     app.get("/v1/markets", async (c) => {
         const active = c.req.query("active") === "1" ? 1 : 0;
-        let query = "SELECT * FROM markets";
+        let query = "SELECT *, rowid FROM markets";
         const params: any[] = [];
+        const shard = c.req.query("shard");
+        const totalShards = c.req.query("shards_total");
+
+        const conditions = [];
+
         if (c.req.query("active") !== undefined) {
-            query += " WHERE active = ?";
+            conditions.push("active = ?");
             params.push(active);
         }
+
+        // Return only markets assigned to this shard
+        // Using rowid for stable sharding since id might be a string or non-sequential
+        if (shard !== undefined && totalShards !== undefined) {
+            const shardNum = parseInt(shard as string, 10);
+            const totalShardsNum = parseInt(totalShards as string, 10);
+            if (!isNaN(shardNum) && !isNaN(totalShardsNum) && totalShardsNum > 0) {
+                conditions.push(`(rowid % ?) = ?`);
+                params.push(totalShardsNum, shardNum);
+            }
+        }
+
+        if (conditions.length > 0) {
+            query += " WHERE " + conditions.join(" AND ");
+        }
+
         const result = await c.env.DB.prepare(query).bind(...params).all();
         return c.json({ markets: result.results || [] });
     });
