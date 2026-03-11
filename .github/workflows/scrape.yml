@@ -35,11 +35,16 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Load DoorDash accounts (cookies)
-        if: ${{ secrets.DOORDASH_ACCOUNTS != '' }}
+        env:
+          DOORDASH_ACCOUNTS: ${{ secrets.DOORDASH_ACCOUNTS }}
         run: |
-          echo "${{ secrets.DOORDASH_ACCOUNTS }}" | base64 -d > accounts.json
-          COUNT=$(node -e "const a=JSON.parse(require('fs').readFileSync('accounts.json','utf-8')); console.log(a.filter(x=>x.cookies&&!x.banned).length)")
-          echo "✅ Loaded $COUNT authenticated DoorDash accounts"
+          if [ -z "$DOORDASH_ACCOUNTS" ]; then
+            echo "No DOORDASH_ACCOUNTS secret found. Skipping authenticated scraping."
+          else
+            echo "$DOORDASH_ACCOUNTS" | base64 -d > accounts.json
+            COUNT=$(node -e "const a=JSON.parse(require('fs').readFileSync('accounts.json','utf-8')); console.log(a.filter(x=>x.cookies&&!x.banned).length)")
+            echo "✅ Loaded $COUNT authenticated DoorDash accounts"
+          fi
 
       - name: Run Scraper Shard ${{ matrix.shard }}
         env:
