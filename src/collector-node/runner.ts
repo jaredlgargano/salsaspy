@@ -1,7 +1,7 @@
 import { pushToApi } from "./ingest";
 import { parseListings } from "./parseListings";
 import { getShard } from "../shared/hash";
-import fs from "fs";
+import { getNextCookies, markBanned, getAccountCount } from "./cookieRotator";
 
 const STATE_TZ: Record<string, string> = {
     'AL': 'America/Chicago', 'AK': 'America/Anchorage', 'AZ': 'America/Phoenix', 'AR': 'America/Chicago',
@@ -25,18 +25,26 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
     // Dynamic import for pure ESM got-scraping package
     const { gotScraping } = await import('got-scraping');
 
-    // 1. Fetch Markets
-    const marketsRes = await fetch(`${apiUrl}/v1/markets?active=1`);
-    if (!marketsRes.ok) {
-        throw new Error(`Failed to fetch markets. Is API running? ${marketsRes.statusText}`);
-    }
-    const marketsData: any = await marketsRes.json();
-    const allMarkets = marketsData.markets || [];
-
     const SHARDS_TOTAL = parseInt(process.env.SHARDS_TOTAL || "100");
-    const myMarkets = allMarkets.filter((m: any) => {
-        if (manualShard !== -1 && getShard(m.market_id, SHARDS_TOTAL) !== manualShard) return false;
 
+    // 1. Fetch Markets
+    const marketRes = await fetch(`${apiUrl}/v1/markets?shard=${manualShard}&shards_total=${SHARDS_TOTAL}&active=1`, {
+        headers: { 'Authorization': `Bearer ${apiKey}` }
+    });
+    
+    if (!marketRes.ok) {
+        console.error(`Failed to fetch markets: ${marketRes.status} ${marketRes.statusText}`);
+        const text = await marketRes.text();
+        console.error(`Response body: ${text}`);
+        return;
+    }
+
+    const { markets } = await marketRes.json() as { markets: any[] };
+    const allMarkets = markets || [];
+
+    const myMarkets = allMarkets.filter((m: any) => {
+        // Sharding is now handled by the API query
+        
         // Timezone check for 12:00 PM (12:00 - 12:59)
         const tz = STATE_TZ[m.state] || 'America/New_York';
         const localHour = parseInt(new Intl.DateTimeFormat('en-US', { hour: 'numeric', hour12: false, timeZone: tz }).format(now));
@@ -49,6 +57,24 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
 
     // No proxy APIs required, Cloudflare is natively bypassed
 
+    // Prioritize top markets (highest ad density) so they get processed first
+    const TOP_MARKETS = new Set([
+        'New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix', 'Philadelphia',
+        'San Antonio', 'San Diego', 'Dallas', 'San Jose', 'Austin', 'Jacksonville',
+        'Fort Worth', 'Columbus', 'Charlotte', 'Indianapolis', 'San Francisco',
+        'Seattle', 'Denver', 'Nashville', 'Oklahoma City', 'Las Vegas', 'Portland',
+        'Memphis', 'Louisville', 'Baltimore', 'Milwaukee', 'Albuquerque', 'Tucson',
+        'Fresno', 'Sacramento', 'Kansas City', 'Mesa', 'Atlanta', 'Omaha',
+        'Colorado Springs', 'Raleigh', 'Long Beach', 'Virginia Beach', 'Minneapolis'
+    ]);
+
+    const prioritizedMarkets = [
+        ...myMarkets.filter((m: any) => TOP_MARKETS.has(m.city)),
+        ...myMarkets.filter((m: any) => !TOP_MARKETS.has(m.city))
+    ];
+    const topCount = prioritizedMarkets.filter((m: any) => TOP_MARKETS.has(m.city)).length;
+    if (topCount > 0) console.log(` -> ${topCount} top-priority metros will be processed first.`);
+
     let successCount = 0;
     let failCount = 0;
     let lastFailureReason: string = "";
@@ -59,7 +85,7 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
     // Build the request queue
     const requestQueue: (() => Promise<void>)[] = [];
 
-    for (const market of myMarkets) {
+    for (const market of prioritizedMarkets) {
 
         // Search Categories
         for (const category of categories) {
@@ -73,11 +99,25 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                 while (attempts < 3 && !success) {
                     attempts++;
                     try {
+                        const cookies = getNextCookies();
+                        const headers: Record<string, string> = {};
+                        if (cookies) headers['Cookie'] = cookies;
+
                         const res = await gotScraping({
                             url: url,
                             headerGeneratorOptions: { browsers: ['chrome'], os: ['macos'] },
+                            headers,
                             timeout: { request: 30000 }
                         });
+
+                        // If account was flagged, mark it banned and retry unauthenticated
+                        if (res.statusCode === 401 || res.statusCode === 403) {
+                            if (cookies) {
+                                markBanned(cookies);
+                                console.log(` -> Account flagged, marked as banned. Retrying unauthenticated...`);
+                            }
+                            throw new Error(`HTTP ${res.statusCode}`);
+                        }
 
                         if (res.statusCode !== 200) throw new Error(`HTTP ${res.statusCode}`);
                         const html = res.body;
@@ -96,7 +136,10 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
 
                             successCount++;
                             success = true; // Break the retry loop
-                            result.merchants.forEach(m => {
+                            result.merchants.forEach((m, i) => {
+                                if (i < 5) {
+                                    console.log(`Sample Merchant: ${m.merchant_name} | Sponsored: ${m.is_sponsored} | Has Discount: ${m.has_discount} | Offer: ${m.offer_title}`);
+                                }
                                 observations.push({
                                     run_id: runId,
                                     market_id: market.market_id,
@@ -123,7 +166,6 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                                 failCount++;
                                 lastFailureReason = result.status;
                                 console.log(` -> Failed parse ${category} in ${market.city} after 3 attempts: ${result.status}`);
-                                fs.writeFileSync(`test_dd_${market.city}.html`, html);
                             } else {
                                 console.log(` -> Failed parse ${category} in ${market.city}: ${result.status} (Attempt ${attempts}/3). Retrying...`);
                                 await new Promise(r => setTimeout(r, 3000));

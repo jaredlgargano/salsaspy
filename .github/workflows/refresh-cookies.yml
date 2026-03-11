@@ -1,0 +1,54 @@
+name: Refresh DoorDash Cookies
+
+on:
+  schedule:
+    # Runs every 2 days at 6 AM UTC to refresh sessions before they expire
+    - cron: '0 6 */2 * *'
+  workflow_dispatch:  # Allow manual trigger from GitHub Actions UI
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+
+      - name: Decode accounts.json from secret
+        run: |
+          echo "${{ secrets.DOORDASH_ACCOUNTS }}" | base64 -d > accounts.json
+          echo "Loaded $(node -e "console.log(JSON.parse(require('fs').readFileSync('accounts.json','utf-8')).filter(a=>!a._comment).length)") accounts"
+
+      - name: Refresh cookies
+        id: refresh
+        run: node scripts/refresh-cookies.js
+        continue-on-error: true
+
+      - name: Re-encode and update secret
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          ENCODED=$(base64 -w 0 accounts.json)
+          gh secret set DOORDASH_ACCOUNTS --body "$ENCODED" --repo ${{ github.repository }}
+          echo "✅ Updated DOORDASH_ACCOUNTS secret with refreshed cookies"
+
+      - name: Fail if refresh failed
+        if: steps.refresh.outcome == 'failure'
+        run: |
+          echo "⚠️ One or more accounts need manual re-login."
+          echo "Run 'npm run export-cookies' locally, then 'npm run push-secrets' to update."
+          exit 1

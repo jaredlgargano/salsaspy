@@ -11,6 +11,19 @@ dist/
 *.log
 !src/**/*.js
 !src/**/*.ts
+!scripts/**/*.js
 !.github/**/*.yml
 
 .DS_Store
+
+# Account pool with session cookies - NEVER commit this
+accounts.json
+
+# Temp test files
+test_*.js
+test_*.ts
+pw_*.html
+pw_*.txt
+test_la.html
+dd_screenshot.png
+pw_output.txt

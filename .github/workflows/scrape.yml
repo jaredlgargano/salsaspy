@@ -34,6 +34,13 @@ jobs:
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps chromium
 
+      - name: Load DoorDash accounts (cookies)
+        if: ${{ secrets.DOORDASH_ACCOUNTS != '' }}
+        run: |
+          echo "${{ secrets.DOORDASH_ACCOUNTS }}" | base64 -d > accounts.json
+          COUNT=$(node -e "const a=JSON.parse(require('fs').readFileSync('accounts.json','utf-8')); console.log(a.filter(x=>x.cookies&&!x.banned).length)")
+          echo "✅ Loaded $COUNT authenticated DoorDash accounts"
+
       - name: Run Scraper Shard ${{ matrix.shard }}
         env:
           # These must be set in your GitHub Repository Secrets
