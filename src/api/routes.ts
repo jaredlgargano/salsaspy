@@ -20,7 +20,7 @@ export function setupRoutes(app: Hono<{ Bindings: ApiEnv }>) {
     app.get("/v1/status", async (c) => {
         // Find recent runs to identify the latest major execution
         const recentRuns = await c.env.DB.prepare(
-            "SELECT run_id, status, started_at FROM runs ORDER BY started_at DESC LIMIT 200"
+            "SELECT run_id, status, failure_reason, started_at FROM runs ORDER BY started_at DESC LIMIT 200"
         ).all();
 
         const activeMarkets = await c.env.DB.prepare("SELECT COUNT(*) as count FROM markets WHERE active = 1").first();
