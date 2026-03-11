@@ -69,6 +69,14 @@ function App() {
     };
 
     const fetchCharts = async () => {
+      // Don't fetch when no brands are selected — avoids rendering hundreds of lines
+      if (selectedBrands.length === 0) {
+        setRankData([]);
+        setSponsorData([]);
+        setDiscountData([]);
+        setActiveBrands([]);
+        return;
+      }
       try {
         let baseParams = '';
         if (selectedCategory === 'BestOfLunch') {
@@ -302,7 +310,10 @@ function App() {
                 </LineChart>
               </ResponsiveContainer>
             ) : (
-              <div style={{ height: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666' }}>No data available to chart</div>
+              <div style={{ height: 400, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#64748b', gap: 8 }}>
+                <span style={{ fontSize: '1.5rem' }}>📊</span>
+                <span>Select restaurants above to see chart data</span>
+              </div>
             )}
 
             <div style={{ marginTop: '2rem' }}>
@@ -336,7 +347,10 @@ function App() {
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <div style={{ height: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666' }}>No data available to chart</div>
+              <div style={{ height: 400, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#64748b', gap: 8 }}>
+                <span style={{ fontSize: '1.5rem' }}>📊</span>
+                <span>Select restaurants above to see chart data</span>
+              </div>
             )}
 
             <div style={{ marginTop: '2rem' }}>
@@ -370,7 +384,10 @@ function App() {
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <div style={{ height: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666' }}>No data available to chart</div>
+              <div style={{ height: 400, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#64748b', gap: 8 }}>
+                <span style={{ fontSize: '1.5rem' }}>📊</span>
+                <span>Select restaurants above to see chart data</span>
+              </div>
             )}
           </div>
         </div>
