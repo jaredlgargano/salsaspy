@@ -429,3 +429,49 @@ h1 {
   background: rgba(255, 255, 255, 0.1);
   color: var(--text-main);
 }
+
+.health-row {
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem; /* for scrollbar */
+}
+
+.health-day-card {
+  flex: 1;
+  min-width: 120px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  padding: 1rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.health-day-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+.health-date {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.health-percent {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.health-percent.high { color: var(--success); }
+.health-percent.medium { color: var(--warning); }
+.health-percent.low { color: var(--danger); }
+
+.health-details {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}

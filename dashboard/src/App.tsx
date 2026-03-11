@@ -25,6 +25,7 @@ const API_BASE = 'https://doordash-scraper-api.uberscraper.workers.dev';
 
 function App() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [healthMetrics, setHealthMetrics] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   // Chart State
@@ -68,6 +69,12 @@ function App() {
         if (!res.ok) throw new Error('Failed to fetch telemetry');
         const data = await res.json();
         setStats(data);
+        
+        // Also fetch health metrics here
+        const healthRes = await fetch(`${API_BASE}/v1/health-metrics`);
+        const healthData = await healthRes.json();
+        setHealthMetrics(healthData.metrics || []);
+
         setError(null);
       } catch (err: any) {
         setError(err.message);
@@ -229,6 +236,31 @@ function App() {
           ) : <div className="loading-skeleton"></div>}
         </div>
       </div>
+
+      {healthMetrics.length > 0 && (
+        <div style={{ marginBottom: '2rem' }}>
+          <div className="section-header">
+            <h2>Data Completeness (7-Day)</h2>
+          </div>
+          <div className="health-row">
+            {[...healthMetrics].reverse().map((day: any, i: number) => {
+               const dateObj = new Date(day.date + 'T12:00:00Z');
+               const dayName = dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+               let colorClass = 'high';
+               if (day.completion_percentage < 90) colorClass = 'medium';
+               if (day.completion_percentage < 50) colorClass = 'low';
+               
+               return (
+                 <div key={i} className="health-day-card">
+                   <div className="health-date">{dayName}</div>
+                   <div className={`health-percent ${colorClass}`}>{day.completion_percentage}%</div>
+                   <div className="health-details">{day.scraped_markets.toLocaleString()} / {day.total_active.toLocaleString()} mkts</div>
+                 </div>
+               );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="chart-controls">
         <div>
