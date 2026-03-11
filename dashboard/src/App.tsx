@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Activity, Clock, Database, MapPin, ServerCrash, BarChart2, TrendingDown } from 'lucide-react';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
 import { BrandColors, getColorForBrand } from './utils/colors';
 import { DataTable } from './components/DataTable';
+import { RestaurantDropdown } from './components/RestaurantDropdown';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import './index.css';
@@ -33,8 +34,6 @@ function App() {
   // UI Controls
   const [selectedCategory, setSelectedCategory] = useState<string>('Mexican');
   const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
-  const [brandSearchQuery, setBrandSearchQuery] = useState<string>('');
-  const [dropdownOpen, setDropdownOpen] = useState<boolean>(false);
   const [aggregationInterval, setAggregationInterval] = useState<string>('day');
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
@@ -130,28 +129,6 @@ function App() {
       prev.includes(brand) ? prev.filter(b => b !== brand) : [...prev, brand]
     );
   }, []);
-
-  // O(1) lookup Set instead of O(n) Array.includes on every render
-  const selectedBrandsSet = useMemo(() => new Set(selectedBrands), [selectedBrands]);
-
-  // Debounced search: only filter after user stops typing for 150ms
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setBrandSearchQuery(val);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => setDebouncedSearch(val), 150);
-  }, []);
-
-  // Cap at 100 visible items to avoid rendering thousands of DOM nodes
-  const MAX_VISIBLE = 100;
-  const filteredBrandsList = useMemo(() => {
-    const q = debouncedSearch.toLowerCase();
-    return availableBrands.filter(b => b.toLowerCase().includes(q));
-  }, [availableBrands, debouncedSearch]);
-  const visibleBrandsList = filteredBrandsList.slice(0, MAX_VISIBLE);
-  const hiddenCount = filteredBrandsList.length - visibleBrandsList.length;
 
   const formatTime = (isoString: string | null) => {
     if (!isoString) return 'Never';
@@ -251,44 +228,13 @@ function App() {
           </select>
         </div>
 
-        <div className="dropdown-container">
-          <label>Restaurants: </label>
-          <div className="dropdown-header" onClick={() => setDropdownOpen(!dropdownOpen)}>
-            {selectedBrands.length === 0 ? 'All Restaurants' : `${selectedBrands.length} Selected`}
-          </div>
-          {dropdownOpen && (
-            <div className="dropdown-menu">
-              <div className="dropdown-actions">
-                <button className="btn-small" onClick={() => setSelectedBrands([])}>Clear All</button>
-                <button className="btn-small" onClick={() => setSelectedBrands([...availableBrands])}>Select All</button>
-              </div>
-              <input 
-                type="text" 
-                className="dropdown-search" 
-                placeholder="Search restaurants..." 
-                value={brandSearchQuery}
-                onChange={handleSearchChange}
-                autoFocus
-              />
-              {visibleBrandsList.map(b => (
-                <div key={b} className="dropdown-item" onClick={() => handleBrandToggle(b)}>
-                  <input 
-                    type="checkbox" 
-                    className="dropdown-checkbox" 
-                    checked={selectedBrandsSet.has(b)}
-                    readOnly
-                  />
-                  <span>{b}</span>
-                </div>
-              ))}
-              {hiddenCount > 0 && (
-                <div className="dropdown-item" style={{ color: '#64748b', fontSize: '0.75rem', pointerEvents: 'none' }}>
-                  + {hiddenCount} more — type to narrow search
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+        <RestaurantDropdown
+          availableBrands={availableBrands}
+          selectedBrands={selectedBrands}
+          onToggle={handleBrandToggle}
+          onClearAll={() => setSelectedBrands([])}
+          onSelectAll={() => setSelectedBrands([...availableBrands])}
+        />
 
         <div>
           <label>Aggregate: </label>
