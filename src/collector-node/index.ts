@@ -1,4 +1,5 @@
 import { runShard } from "./runner";
+import { initializeProxies } from "./freeProxy";
 import dotenv from "dotenv";
 
 dotenv.config({ path: ".dev.vars" });
@@ -8,6 +9,10 @@ const API_KEY = process.env.API_KEY || "my-super-secret-key";
 
 async function start() {
     console.log("Starting Node.js Playwright Collector...");
+
+    if (!process.env.PROXY_URL) {
+        await initializeProxies();
+    }
 
     // In a real cron environment, we'd determine shard dynamically.
     // We can pass process.env.SHARD to run a specific shard partition.

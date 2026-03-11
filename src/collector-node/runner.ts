@@ -3,6 +3,7 @@ import { parseListings } from "./parseListings";
 import { getShard } from "../shared/hash";
 import { getNextCookies, markBanned, getAccountCount } from "./cookieRotator";
 import { HttpsProxyAgent } from "https-proxy-agent";
+import { getRandomProxy } from "./freeProxy";
 
 const STATE_TZ: Record<string, string> = {
     'AL': 'America/Chicago', 'AK': 'America/Anchorage', 'AZ': 'America/Phoenix', 'AR': 'America/Chicago',
@@ -28,7 +29,7 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
 
     const SHARDS_TOTAL = parseInt(process.env.SHARDS_TOTAL || "100");
     const proxyUrl = process.env.PROXY_URL;
-    const agent = proxyUrl ? new HttpsProxyAgent(proxyUrl) : undefined;
+    const baseAgent = proxyUrl ? new HttpsProxyAgent(proxyUrl) : undefined;
 
     // 1. Fetch Markets
     const marketRes = await fetch(`${apiUrl}/v1/markets?shard=${manualShard}&shards_total=${SHARDS_TOTAL}&active=1`, {
@@ -99,19 +100,25 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
             requestQueue.push(async () => {
                 let attempts = 0;
                 let success = false;
-                while (attempts < 3 && !success) {
+                while (attempts < 10 && !success) {
                     attempts++;
                     try {
                         const cookies = getNextCookies();
                         const headers: Record<string, string> = {};
                         if (cookies) headers['Cookie'] = cookies;
 
+                        let currentAgent = baseAgent;
+                        if (!currentAgent && !proxyUrl) {
+                            const fp = getRandomProxy();
+                            if (fp) currentAgent = new HttpsProxyAgent(fp);
+                        }
+
                         const res = await gotScraping({
                             url: url,
                             headerGeneratorOptions: { browsers: ['chrome'], os: ['macos'] },
                             headers,
-                            agent: agent ? { https: agent, http: agent } : undefined,
-                            timeout: { request: 30000 }
+                            agent: currentAgent ? { https: currentAgent, http: currentAgent } : undefined,
+                            timeout: { request: 15000 }
                         });
 
                         // If account was flagged, mark it banned and retry unauthenticated
@@ -166,27 +173,27 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                             });
                             console.log(` -> Found ${result.merchants.length} merchants in ${market.city} (${categoryName}).`);
                         } else {
-                            if (attempts === 3) {
+                            if (attempts === 10) {
                                 failCount++;
                                 lastFailureReason = result.status;
-                                console.log(` -> Failed parse ${category} in ${market.city} after 3 attempts: ${result.status}`);
+                                console.log(` -> Failed parse ${category} in ${market.city} after 10 attempts: ${result.status}`);
                             } else {
-                                console.log(` -> Failed parse ${category} in ${market.city}: ${result.status} (Attempt ${attempts}/3). Retrying...`);
-                                await new Promise(r => setTimeout(r, 3000));
+                                console.log(` -> Failed parse ${category} in ${market.city}: ${result.status} (Attempt ${attempts}/10). Retrying...`);
+                                await new Promise(r => setTimeout(r, 1000));
                             }
                         }
                     } catch (e: any) {
-                        if (attempts === 3) {
+                        if (attempts === 10) {
                             failCount++;
                             lastFailureReason = e.message;
-                            console.log(` -> Navigation error in ${market.city} (${categoryName}) after 3 attempts: ${e.message}`);
+                            console.log(` -> Navigation error in ${market.city} (${categoryName}) after 10 attempts: ${e.message}`);
                         } else {
-                            let sleepTime = 3000;
+                            let sleepTime = 1000;
                             if (e.message.includes('429')) {
-                                sleepTime = 5000 * attempts;
+                                sleepTime = 2500 * attempts;
                                 console.log(` -> Rate limited (429) in ${market.city} (${categoryName}). Sleeping for ${sleepTime}ms...`);
                             } else {
-                                console.log(` -> Timeout/Error in ${market.city} (${categoryName}): ${e.message} (Attempt ${attempts}/3). Retrying...`);
+                                console.log(` -> Timeout/Error in ${market.city} (${categoryName}): ${e.message.substring(0, 100)} (Attempt ${attempts}/10).`);
                             }
                             await new Promise(r => setTimeout(r, sleepTime)); // Sleep before retry
                         }
@@ -201,14 +208,20 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
         requestQueue.push(async () => {
             let attempts = 0;
             let success = false;
-            while (attempts < 3 && !success) {
+            while (attempts < 10 && !success) {
                 attempts++;
                 try {
+                    let currentAgent = baseAgent;
+                    if (!currentAgent && !proxyUrl) {
+                        const fp = getRandomProxy();
+                        if (fp) currentAgent = new HttpsProxyAgent(fp);
+                    }
+
                     const res = await gotScraping({
                         url: lunchUrl,
                         headerGeneratorOptions: { browsers: ['chrome'], os: ['macos'] },
-                        agent: agent ? { https: agent, http: agent } : undefined,
-                        timeout: { request: 30000 }
+                        agent: currentAgent ? { https: currentAgent, http: currentAgent } : undefined,
+                        timeout: { request: 15000 }
                     });
 
                     if (res.statusCode !== 200) throw new Error(`HTTP ${res.statusCode}`);
@@ -244,27 +257,27 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                         });
                         console.log(` -> Found ${result.merchants.length} merchants in ${market.city} (Best of Lunch).`);
                     } else {
-                        if (attempts === 3) {
+                        if (attempts === 10) {
                             failCount++;
                             lastFailureReason = result.status;
-                            console.log(` -> Failed parse Best of Lunch in ${market.city} after 3 attempts: ${result.status}`);
+                            console.log(` -> Failed parse Best of Lunch in ${market.city} after 10 attempts: ${result.status}`);
                         } else {
-                            console.log(` -> Failed parse Best of Lunch in ${market.city}: ${result.status} (Attempt ${attempts}/3). Retrying...`);
-                            await new Promise(r => setTimeout(r, 3000));
+                            console.log(` -> Failed parse Best of Lunch in ${market.city}: ${result.status} (Attempt ${attempts}/10). Retrying...`);
+                            await new Promise(r => setTimeout(r, 1000));
                         }
                     }
                 } catch (e: any) {
-                    if (attempts === 3) {
+                    if (attempts === 10) {
                         failCount++;
                         lastFailureReason = e.message;
-                        console.log(` -> Navigation error in ${market.city} (Best of Lunch) after 3 attempts: ${e.message}`);
+                        console.log(` -> Navigation error in ${market.city} (Best of Lunch) after 10 attempts: ${e.message}`);
                     } else {
-                        let sleepTime = 3000;
+                        let sleepTime = 1000;
                         if (e.message.includes('429')) {
-                            sleepTime = 5000 * attempts;
+                            sleepTime = 2500 * attempts;
                             console.log(` -> Rate limited (429) in ${market.city} (Best of Lunch). Sleeping for ${sleepTime}ms...`);
                         } else {
-                            console.log(` -> Timeout/Error in ${market.city} (Best of Lunch): ${e.message} (Attempt ${attempts}/3). Retrying...`);
+                            console.log(` -> Timeout/Error in ${market.city} (Best of Lunch): ${e.message.substring(0, 100)} (Attempt ${attempts}/10).`);
                         }
                         await new Promise(r => setTimeout(r, sleepTime));
                     }
