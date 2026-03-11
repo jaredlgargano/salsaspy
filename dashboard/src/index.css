@@ -76,6 +76,12 @@ h1 {
   border-color: rgba(244, 63, 94, 0.2);
 }
 
+.status-badge.warning {
+  background: rgba(245, 158, 11, 0.1);
+  color: rgba(245, 158, 11, 1);
+  border-color: rgba(245, 158, 11, 0.2);
+}
+
 .status-dot {
   width: 8px;
   height: 8px;

@@ -16,6 +16,7 @@ interface DashboardStats {
   activeMarkets: number;
   totalObservations: number;
   health: string;
+  healthTier?: string;
   status: string;
 }
 
@@ -152,7 +153,6 @@ function App() {
     });
   };
 
-  const isHealthy = stats?.health === 'Healthy';
 
   return (
     <div className="dashboard-container">
@@ -164,8 +164,8 @@ function App() {
               <div className="status-dot"></div> Disconnected
             </div>
           ) : stats ? (
-            <div className={`status-badge ${!isHealthy ? 'error' : ''}`}>
-              <div className={`status-dot ${isHealthy ? 'pulse' : ''}`}></div>
+            <div className={`status-badge ${stats.healthTier === 'Healthy' ? 'success' : stats.healthTier === 'Degraded' ? 'warning' : 'error'}`}>
+              <div className={`status-dot ${stats.healthTier === 'Healthy' ? 'pulse' : ''}`}></div>
               {stats.health}
             </div>
           ) : (
