@@ -238,15 +238,14 @@ function App() {
                const dateObj = new Date(day.date + 'T12:00:00Z');
                const dayName = dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
                let colorClass = 'high';
-               let statusText = 'Healthy';
-               if (day.completion_percentage < 90) { colorClass = 'medium'; statusText = 'Degraded'; }
-               if (day.completion_percentage < 50) { colorClass = 'low'; statusText = 'Critical'; }
+               if (day.completion_percentage < 90) { colorClass = 'medium'; }
+               if (day.completion_percentage < 50) { colorClass = 'low'; }
                
                return (
                  <div key={i} className="health-day-card">
                    <div className="health-date">{dayName}</div>
-                   <div className={`health-percent ${colorClass}`}>{statusText}</div>
-                   <div className="health-details">{day.scraped_markets.toLocaleString()} / {day.total_active.toLocaleString()} mkts ({day.completion_percentage}%)</div>
+                   <div className={`health-percent ${colorClass}`}>{day.completion_percentage}%</div>
+                   <div className="health-details">{day.scraped_markets.toLocaleString()} / {day.total_active.toLocaleString()} mkts</div>
                  </div>
                );
             })}
