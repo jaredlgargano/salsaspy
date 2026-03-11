@@ -170,16 +170,7 @@ function App() {
             <div className="status-badge error">
               <div className="status-dot"></div> Disconnected
             </div>
-          ) : stats ? (
-            <div className={`status-badge ${stats.healthTier === 'Healthy' ? 'success' : stats.healthTier === 'Degraded' ? 'warning' : 'error'}`}>
-              <div className={`status-dot ${stats.healthTier === 'Healthy' ? 'pulse' : ''}`}></div>
-              {stats.health}
-            </div>
-          ) : (
-            <div className="status-badge" style={{ opacity: 0.5 }}>
-              <div className="status-dot pulse"></div> Connecting...
-            </div>
-          )}
+          ) : null}
         </div>
       </header>
 
@@ -247,14 +238,15 @@ function App() {
                const dateObj = new Date(day.date + 'T12:00:00Z');
                const dayName = dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
                let colorClass = 'high';
-               if (day.completion_percentage < 90) colorClass = 'medium';
-               if (day.completion_percentage < 50) colorClass = 'low';
+               let statusText = 'Healthy';
+               if (day.completion_percentage < 90) { colorClass = 'medium'; statusText = 'Degraded'; }
+               if (day.completion_percentage < 50) { colorClass = 'low'; statusText = 'Critical'; }
                
                return (
                  <div key={i} className="health-day-card">
                    <div className="health-date">{dayName}</div>
-                   <div className={`health-percent ${colorClass}`}>{day.completion_percentage}%</div>
-                   <div className="health-details">{day.scraped_markets.toLocaleString()} / {day.total_active.toLocaleString()} mkts</div>
+                   <div className={`health-percent ${colorClass}`}>{statusText}</div>
+                   <div className="health-details">{day.scraped_markets.toLocaleString()} / {day.total_active.toLocaleString()} mkts ({day.completion_percentage}%)</div>
                  </div>
                );
             })}
