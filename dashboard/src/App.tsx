@@ -32,8 +32,13 @@ function App() {
   const [discountData, setDiscountData] = useState<any[]>([]);
 
   // UI Controls
-  const [selectedCategory, setSelectedCategory] = useState<string>('Mexican');
-  const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>('All Categories');
+  const [selectedBrands, setSelectedBrands] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('dashboard_selected_brands');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
   const [aggregationInterval, setAggregationInterval] = useState<string>('day');
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
@@ -133,9 +138,11 @@ function App() {
   }, [selectedCategory, selectedBrands, aggregationInterval, startDate, endDate]);
 
   const handleBrandToggle = useCallback((brand: string) => {
-    setSelectedBrands(prev =>
-      prev.includes(brand) ? prev.filter(b => b !== brand) : [...prev, brand]
-    );
+    setSelectedBrands(prev => {
+      const next = prev.includes(brand) ? prev.filter(b => b !== brand) : [...prev, brand];
+      localStorage.setItem('dashboard_selected_brands', JSON.stringify(next));
+      return next;
+    });
   }, []);
 
   const formatTime = (isoString: string | null) => {
@@ -240,8 +247,8 @@ function App() {
           availableBrands={availableBrands}
           selectedBrands={selectedBrands}
           onToggle={handleBrandToggle}
-          onClearAll={() => setSelectedBrands([])}
-          onSelectAll={() => setSelectedBrands([...availableBrands])}
+          onClearAll={() => { setSelectedBrands([]); localStorage.setItem('dashboard_selected_brands', '[]'); }}
+          onSelectAll={() => { const all = [...availableBrands]; setSelectedBrands(all); localStorage.setItem('dashboard_selected_brands', JSON.stringify(all)); }}
         />
 
         <div>
