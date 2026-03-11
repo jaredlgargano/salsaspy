@@ -459,6 +459,58 @@
                 <div class="stat-subtext">Cron triggers executed</div>
             </div>
         </div>
+        
+        <style>
+            .health-row {
+                display: flex;
+                gap: 1rem;
+                margin-bottom: 2rem;
+                overflow-x: auto;
+                padding-bottom: 1rem; /* for scrollbar */
+            }
+            .health-day-card {
+                flex: 1;
+                min-width: 120px;
+                background: var(--bg-card);
+                border: 1px solid var(--border-light);
+                border-radius: var(--radius);
+                padding: 1rem;
+                text-align: center;
+                display: flex;
+                flex-direction: column;
+                gap: 0.5rem;
+                transition: transform 0.2s, box-shadow 0.2s;
+            }
+            .health-day-card:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            }
+            .health-date {
+                font-size: 0.875rem;
+                color: var(--text-muted);
+                font-weight: 500;
+            }
+            .health-percent {
+                font-size: 1.5rem;
+                font-weight: 700;
+            }
+            .health-percent.high { color: var(--success); }
+            .health-percent.medium { color: #f59e0b; }
+            .health-percent.low { color: var(--danger); }
+            .health-details {
+                font-size: 0.75rem;
+                color: var(--text-muted);
+            }
+        </style>
+
+        <div style="margin-bottom: 2rem;">
+            <div class="section-header">
+                <h2>Data Completeness (7-Day)</h2>
+            </div>
+            <div class="health-row" id="health-metrics-container">
+                <div style="color: var(--text-muted); padding: 1rem;">Loading health metrics...</div>
+            </div>
+        </div>
 
         <div>
             <div class="section-header">
@@ -562,41 +614,73 @@
                 const tableBody = document.getElementById('runs-body');
                 if (!runsData.runs || runsData.runs.length === 0) {
                     tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 40px;">No runs found in database.</td></tr>';
-                    return;
+                } else {
+                    // Update 24h runs count
+                    const yesterday = new Date(Date.now() - 24*60*60*1000);
+                    const recentRuns = runsData.runs.filter(r => new Date(r.started_at) > yesterday);
+                    document.getElementById('stat-runs').innerText = recentRuns.length;
+
+                    // Render table top 10
+                    tableBody.innerHTML = '';
+                    runsData.runs.slice(0, 10).forEach(run => {
+                        const statusClass = `status-${run.status.toLowerCase()}`;
+                        
+                        const start = new Date(run.started_at);
+                        const end = run.ended_at ? new Date(run.ended_at) : null;
+                        const durationStr = end ? Math.round((end - start)/1000) + 's' : 'Running...';
+                        
+                        const meta = run.metadata ? JSON.parse(run.metadata) : {};
+                        const metricsHtml = meta.successCount !== undefined 
+                            ? `<span style="color: var(--success)">${meta.successCount} ok</span> / <span style="color: var(--danger)">${meta.failCount} err</span>` 
+                            : (run.failure_reason || '-');
+
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td>
+                                <div style="font-weight: 500">${start.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                                <div class="id-cell" style="font-size: 0.75rem; margin-top: 4px;">${run.run_id.substring(0, 18)}...</div>
+                            </td>
+                            <td><span class="status-badge ${statusClass}">${run.status}</span></td>
+                            <td>${run.shard} / ${run.shards_total}</td>
+                            <td class="date-cell">${durationStr}</td>
+                            <td class="date-cell">${metricsHtml}</td>
+                        `;
+                        tableBody.appendChild(tr);
+                    });
                 }
 
-                // Update 24h runs count
-                const yesterday = new Date(Date.now() - 24*60*60*1000);
-                const recentRuns = runsData.runs.filter(r => new Date(r.started_at) > yesterday);
-                document.getElementById('stat-runs').innerText = recentRuns.length;
-
-                // Render table top 10
-                tableBody.innerHTML = '';
-                runsData.runs.slice(0, 10).forEach(run => {
-                    const statusClass = `status-${run.status.toLowerCase()}`;
+                // Fetch Health Metrics
+                try {
+                    const healthRes = await fetch('/v1/health-metrics');
+                    const healthData = await healthRes.json();
+                    const healthContainer = document.getElementById('health-metrics-container');
                     
-                    const start = new Date(run.started_at);
-                    const end = run.ended_at ? new Date(run.ended_at) : null;
-                    const durationStr = end ? Math.round((end - start)/1000) + 's' : 'Running...';
-                    
-                    const meta = run.metadata ? JSON.parse(run.metadata) : {};
-                    const metricsHtml = meta.successCount !== undefined 
-                        ? `<span style="color: var(--success)">${meta.successCount} ok</span> / <span style="color: var(--danger)">${meta.failCount} err</span>` 
-                        : (run.failure_reason || '-');
+                    if (!healthData.metrics || healthData.metrics.length === 0) {
+                        healthContainer.innerHTML = '<div style="color: var(--text-muted); padding: 1rem;">No health data available.</div>';
+                    } else {
+                        healthContainer.innerHTML = '';
+                        // Reverse so oldest is left, newest is right
+                        [...healthData.metrics].reverse().forEach(day => {
+                            const dateObj = new Date(day.date + 'T12:00:00Z'); // force midday UTC to avoid timezone shift
+                            const dayName = dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+                            
+                            let colorClass = 'high';
+                            if (day.completion_percentage < 90) colorClass = 'medium';
+                            if (day.completion_percentage < 50) colorClass = 'low';
 
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td>
-                            <div style="font-weight: 500">${start.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
-                            <div class="id-cell" style="font-size: 0.75rem; margin-top: 4px;">${run.run_id.substring(0, 18)}...</div>
-                        </td>
-                        <td><span class="status-badge ${statusClass}">${run.status}</span></td>
-                        <td>${run.shard} / ${run.shards_total}</td>
-                        <td class="date-cell">${durationStr}</td>
-                        <td class="date-cell">${metricsHtml}</td>
-                    `;
-                    tableBody.appendChild(tr);
-                });
+                            const card = document.createElement('div');
+                            card.className = 'health-day-card';
+                            card.innerHTML = `
+                                <div class="health-date">${dayName}</div>
+                                <div class="health-percent ${colorClass}">${day.completion_percentage}%</div>
+                                <div class="health-details">${day.scraped_markets} / ${day.total_active} mkts</div>
+                            `;
+                            healthContainer.appendChild(card);
+                        });
+                    }
+                } catch (e) {
+                    console.error("Health metrics fetch error:", e);
+                }
 
             } catch (error) {
                 console.error("Dashboard fetch error:", error);

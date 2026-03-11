@@ -59,25 +59,35 @@ export function setupRoutes(app: Hono<{ Bindings: ApiEnv }>) {
         const latestBaseId = sortedBaseIds[0];
         const latestGroup = groups[latestBaseId];
 
-        // Health: SUCCESS only if NO shards failed/partial and at least one shard reported success
-        const hasFailure = latestGroup.shards.some(s => s.status === 'FAILED' || s.status === 'PARTIAL');
-        const anySuccess = latestGroup.shards.some(s => s.status === 'SUCCESS' || s.status === 'PARTIAL');
+        // Define success score: SUCCESS = 1, PARTIAL = 0.5, FAILED = 0
+        const totalCount = latestGroup.shards.length;
+        const failedCount = latestGroup.shards.filter(s => s.status === 'FAILED').length;
+        const partialCount = latestGroup.shards.filter(s => s.status === 'PARTIAL').length;
         
+        const score = totalCount > 0 ? (totalCount - failedCount - partialCount * 0.5) / totalCount : 0;
+        
+        const issues = Array.from(new Set(
+            latestGroup.shards
+                .filter(s => s.status === 'FAILED' || s.status === 'PARTIAL')
+                .map(s => s.failure_reason)
+                .filter(Boolean)
+        ));
+
         let healthText = 'Healthy';
-        if (hasFailure) {
-            const issues = Array.from(new Set(
-                latestGroup.shards
-                    .filter(s => s.status === 'FAILED' || s.status === 'PARTIAL')
-                    .map(s => s.failure_reason)
-                    .filter(Boolean)
-            ));
-            if (issues.length > 0) {
-                healthText = `Issues: ${issues.join(', ')}`;
-            } else {
-                healthText = 'Issues detected (Unknown root cause)';
-            }
-        } else if (!anySuccess) {
+        let healthTier = 'Healthy';
+
+        if (totalCount === 0 || (!latestGroup.shards.some(s => s.status === 'SUCCESS' || s.status === 'PARTIAL'))) {
             healthText = 'No successful runs recently';
+            healthTier = 'Critical';
+        } else if (score >= 0.90) {
+            healthText = 'Healthy';
+            healthTier = 'Healthy';
+        } else if (score >= 0.50) {
+            healthText = issues.length > 0 ? `Degraded: ${issues.join(', ')}` : 'Degraded';
+            healthTier = 'Degraded';
+        } else {
+            healthText = issues.length > 0 ? `Critical: ${issues.join(', ')}` : 'Critical Issues';
+            healthTier = 'Critical';
         }
 
         // Calculate next run assuming top of the hour execution (minute 30 as per scrape.yml)
@@ -92,7 +102,8 @@ export function setupRoutes(app: Hono<{ Bindings: ApiEnv }>) {
             activeMarkets: activeMarkets?.count || 0,
             totalObservations: totalObs?.count || 0,
             health: healthText,
-            status: hasFailure ? 'PARTIAL_FAILURE' : (anySuccess ? 'SUCCESS' : 'PENDING'),
+            healthTier: healthTier,
+            status: failedCount > 0 ? 'PARTIAL_FAILURE' : (totalCount > 0 ? 'SUCCESS' : 'PENDING'),
             shardCount: latestGroup.shards.length,
             baseRunId: latestBaseId
         });
@@ -130,6 +141,34 @@ export function setupRoutes(app: Hono<{ Bindings: ApiEnv }>) {
 
         const result = await c.env.DB.prepare(query).bind(...params).all();
         return c.json({ markets: result.results || [] });
+    });
+
+    // Health Metrics (Daily Completeness)
+    app.get("/v1/health-metrics", async (c) => {
+        // Get total active tracked markets
+        const activeRes = await c.env.DB.prepare("SELECT COUNT(*) as total FROM markets WHERE active = 1").first();
+        const totalActive = (activeRes?.total as number) || 1; // prevent divide by zero
+
+        // Get unique markets scraped per day for the last 7 days
+        const query = `
+            SELECT 
+                DATE(observed_at) as date,
+                COUNT(DISTINCT market_id) as scraped_markets
+            FROM observations
+            GROUP BY DATE(observed_at)
+            ORDER BY date DESC
+            LIMIT 7
+        `;
+        const result = await c.env.DB.prepare(query).all();
+        
+        const metrics = (result.results || []).map((row: any) => ({
+            date: row.date,
+            scraped_markets: row.scraped_markets,
+            total_active: totalActive,
+            completion_percentage: Math.round((row.scraped_markets / totalActive) * 100)
+        }));
+
+        return c.json({ metrics });
     });
 
     // Runs
