@@ -467,9 +467,9 @@ h1 {
   font-weight: 700;
 }
 
-.health-percent.high { color: var(--success); }
-.health-percent.medium { color: var(--warning); }
-.health-percent.low { color: var(--danger); }
+.health-percent.high { color: #10b981; /* emerald/success */ }
+.health-percent.medium { color: #f59e0b; /* amber/warning */ }
+.health-percent.low { color: #f43f5e; /* rose/danger */ }
 
 .health-details {
   font-size: 0.75rem;
