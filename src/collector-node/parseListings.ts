@@ -35,8 +35,46 @@ export function parseListings(html: string): ParseResult {
 
     const merchants: ExtractedMerchant[] = [];
     const $ = cheerio.load(html);
-
     let rank = 1;
+
+    // 3. Try to extract from __NEXT_DATA__ JSON first (more robust)
+    const nextDataJson = $('#__NEXT_DATA__').html();
+    if (nextDataJson) {
+        try {
+            const parsed = JSON.parse(nextDataJson);
+            // Traverse the complex DoorDash state tree
+            // Based on the test case: props.pageProps.items
+            const items = parsed.props?.pageProps?.items || [];
+            if (Array.isArray(items)) {
+                items.forEach((item: any) => {
+                    const name = item.name || item.merchant_name;
+                    if (!name) return;
+
+                    merchants.push({
+                        merchant_name: name.trim(),
+                        rank: rank++,
+                        is_sponsored: !!item.isSponsored || !!item.is_sponsored,
+                        has_discount: !!(item.offers?.length > 0) || !!item.has_discount,
+                        offer_title: item.offers?.[0]?.title || item.offer_title || null,
+                        raw_snippet: JSON.stringify(item).substring(0, 200),
+                        store_id: item.id || item.store_id || null,
+                        discount_type: null,
+                        delivery_fee: null,
+                        rating: item.rating || null,
+                        review_count: item.review_count || null
+                    });
+                });
+            }
+        } catch (e) {
+            console.warn("Failed to parse __NEXT_DATA__:", e);
+        }
+    }
+
+    if (merchants.length > 0) {
+        return { status: "SUCCESS", merchants };
+    }
+
+    // 4. Fallback to DOM parsing
     // More robust store card selection - catch them in carousels and lists
     $('[data-anchor-id="StoreCard"], [data-testid="StoreCard"], a[href*="/store/"]').each((i, el) => {
         const $el = $(el);
