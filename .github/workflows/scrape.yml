@@ -13,6 +13,8 @@ concurrency:
 jobs:
   scrape:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     strategy:
       matrix:
         # 100 shards = ~40 markets per shard (Total 4051 markets)

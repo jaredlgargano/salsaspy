@@ -149,11 +149,14 @@ export function setupRoutes(app: Hono<{ Bindings: ApiEnv }>) {
         const activeRes = await c.env.DB.prepare("SELECT COUNT(*) as total FROM markets WHERE active = 1").first();
         const totalActive = (activeRes?.total as number) || 1; // prevent divide by zero
 
-        // Get unique markets scraped per day for the last 7 days
+        // Get unique markets scraped per day for the last 7 days, 
+        // broken down by internal metrics (any observation, has sponsored, has discount)
         const query = `
             SELECT 
                 DATE(observed_at) as date,
-                COUNT(DISTINCT market_id) as scraped_markets
+                COUNT(DISTINCT market_id) as markets_with_rank,
+                COUNT(DISTINCT CASE WHEN is_sponsored = 1 THEN market_id END) as markets_with_sponsored,
+                COUNT(DISTINCT CASE WHEN has_discount = 1 THEN market_id END) as markets_with_offers
             FROM observations
             GROUP BY DATE(observed_at)
             ORDER BY date DESC
@@ -163,9 +166,10 @@ export function setupRoutes(app: Hono<{ Bindings: ApiEnv }>) {
         
         const metrics = (result.results || []).map((row: any) => ({
             date: row.date,
-            scraped_markets: row.scraped_markets,
             total_active: totalActive,
-            completion_percentage: Math.round((row.scraped_markets / totalActive) * 100)
+            rank_pct: Math.round((row.markets_with_rank / totalActive) * 100),
+            sponsored_pct: Math.round((row.markets_with_sponsored / totalActive) * 100),
+            offer_pct: Math.round((row.markets_with_offers / totalActive) * 100)
         }));
 
         return c.json({ metrics });

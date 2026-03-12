@@ -462,14 +462,35 @@ h1 {
   font-weight: 500;
 }
 
-.health-percent {
-  font-size: 1.5rem;
+.health-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.25rem;
+  margin: 0.5rem 0;
+}
+
+.health-metric-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.health-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.health-value {
+  font-size: 1rem;
   font-weight: 700;
 }
 
-.health-percent.high { color: #10b981; /* emerald/success */ }
-.health-percent.medium { color: #f59e0b; /* amber/warning */ }
-.health-percent.low { color: #f43f5e; /* rose/danger */ }
+.health-value.high { color: #10b981; }
+.health-value.medium { color: #f59e0b; }
+.health-value.low { color: #f43f5e; }
 
 .health-details {
   font-size: 0.75rem;

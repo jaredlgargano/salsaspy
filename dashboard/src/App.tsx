@@ -237,15 +237,31 @@ function App() {
             {[...healthMetrics].reverse().map((day: any, i: number) => {
                const dateObj = new Date(day.date + 'T12:00:00Z');
                const dayName = dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-               let colorClass = 'high';
-               if (day.completion_percentage < 90) { colorClass = 'medium'; }
-               if (day.completion_percentage < 50) { colorClass = 'low'; }
+               
+               const getStatus = (pct: number) => {
+                 if (pct >= 90) return 'high';
+                 if (pct >= 50) return 'medium';
+                 return 'low';
+               };
                
                return (
                  <div key={i} className="health-day-card">
                    <div className="health-date">{dayName}</div>
-                   <div className={`health-percent ${colorClass}`}>{day.completion_percentage}%</div>
-                   <div className="health-details">{day.scraped_markets.toLocaleString()} / {day.total_active.toLocaleString()} mkts</div>
+                   <div className="health-metrics-grid">
+                     <div className="health-metric-item">
+                       <span className="health-label">R</span>
+                       <span className={`health-value ${getStatus(day.rank_pct)}`}>{day.rank_pct}%</span>
+                     </div>
+                     <div className="health-metric-item">
+                       <span className="health-label">S</span>
+                       <span className={`health-value ${getStatus(day.sponsored_pct)}`}>{day.sponsored_pct}%</span>
+                     </div>
+                     <div className="health-metric-item">
+                       <span className="health-label">O</span>
+                       <span className={`health-value ${getStatus(day.offer_pct)}`}>{day.offer_pct}%</span>
+                     </div>
+                   </div>
+                   <div className="health-details">Coverage Metrics</div>
                  </div>
                );
             })}
