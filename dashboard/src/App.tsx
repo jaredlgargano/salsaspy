@@ -248,18 +248,28 @@ function App() {
           <div className="metric-header">
             <Shield className="metric-icon" size={18} /> Cookie Health
           </div>
-          {cookieStatus.length > 0 ? (
-            <>
-              <div className={`metric-value ${cookieStatus.every(a => a.status === 'Active') ? 'text-emerald' : 'text-rose'}`}>
-                {cookieStatus.filter(a => a.status === 'Active' || a.status === 'Expiring Soon').length} / {cookieStatus.length}
-              </div>
-              <div className="metric-sub">
-                {cookieStatus.some(a => a.status === 'Expiring Soon') 
-                  ? `⚠️ ${cookieStatus.find(a => a.status === 'Expiring Soon').label || 'Account'} expires in ${Math.ceil((new Date(cookieStatus.find(a => a.status === 'Expiring Soon').expiry_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24))}d`
-                  : 'All sessions healthy'}
-              </div>
-            </>
-          ) : <div className="loading-skeleton"></div>}
+          {cookieStatus.length > 0 ? (() => {
+            const activeCount = cookieStatus.filter(a => a.status === 'Active' || a.status === 'Expiring Soon').length;
+            const healthPct = (activeCount / cookieStatus.length) * 100;
+            const getColorClass = (pct: number) => {
+              if (pct >= 90) return 'text-emerald';
+              if (pct >= 50) return 'text-amber';
+              return 'text-rose';
+            };
+            
+            return (
+              <>
+                <div className={`metric-value ${getColorClass(healthPct)}`}>
+                  {activeCount} / {cookieStatus.length}
+                </div>
+                <div className="metric-sub">
+                  {cookieStatus.some(a => a.status === 'Expiring Soon') 
+                    ? `⚠️ ${cookieStatus.find(a => a.status === 'Expiring Soon').label || 'Account'} expires in ${Math.ceil((new Date(cookieStatus.find(a => a.status === 'Expiring Soon').expiry_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24))}d`
+                    : healthPct === 100 ? 'All sessions healthy' : `${cookieStatus.length - activeCount} sessions expired`}
+                </div>
+              </>
+            );
+          })() : <div className="loading-skeleton"></div>}
         </div>
       </div>
 

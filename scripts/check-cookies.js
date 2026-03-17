@@ -83,7 +83,8 @@ async function main() {
     const apiKey = process.env.API_KEY || process.env.SCRAPER_API_KEY;
 
     if (!apiKey) {
-        console.log('  ℹ️  Skipping remote sync (no API_KEY found in environment).');
+        console.warn('  ⚠️  Skipping remote sync: API_KEY or SCRAPER_API_KEY not found in environment.');
+        console.warn('     Ensure you have a .env file locally or secrets set in GitHub Actions.');
         return;
     }
 

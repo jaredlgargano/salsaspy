@@ -116,9 +116,11 @@ export function setupRoutes(app: Hono<{ Bindings: ApiEnv }>) {
     });
 
     app.post("/v1/status/cookies/sync", async (c) => {
-        // Auth check - simplified for now, should ideally use the scraper key
-        const apiKey = c.req.header("Authorization")?.replace("Bearer ", "");
-        if (apiKey !== c.env.SCRAPER_API_KEY && apiKey !== c.env.API_KEY) {
+        const serverKey = c.env.SCRAPER_API_KEY || c.env.API_KEY;
+        const clientKey = c.req.header("Authorization")?.replace("Bearer ", "");
+        
+        if (!serverKey || clientKey !== serverKey) {
+            console.error(`Sync unauthorized. Server key set: ${!!serverKey}`);
             return c.json({ error: "Unauthorized" }, 401);
         }
 

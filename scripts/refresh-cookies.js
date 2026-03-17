@@ -129,7 +129,9 @@ async function main() {
     const apiUrl = process.env.API_URL || 'https://doordash-scraper-api.uberscraper.workers.dev';
     const apiKey = process.env.API_KEY || process.env.SCRAPER_API_KEY;
 
-    if (apiKey) {
+    if (!apiKey) {
+        console.warn('  ⚠️  Skipping remote sync: API_KEY or SCRAPER_API_KEY not found in environment.');
+    } else {
         console.log(`  🔄 Syncing updated health to ${apiUrl}...`);
         const payload = allAccounts.filter(a => !a._comment).map(a => {
             const exp = getJwtExpiry(a.cookies || '');
