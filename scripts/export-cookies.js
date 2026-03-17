@@ -54,57 +54,72 @@ async function main() {
         queue = [{ email, label, manual: true }];
     }
 
-    for (const target of queue) {
-        console.log(`\n--- Processing: ${target.email} (${target.label || 'New'}) ---`);
-        console.log('Launching Chrome...');
+    let browser;
+    try {
+        for (const target of queue) {
+            console.log(`\n--- Processing: ${target.email} (${target.label || 'New'}) ---`);
+            console.log('Launching Chrome...');
 
-        const browser = await chromium.launchPersistentContext(TEMP_PROFILE, {
-            executablePath: CHROME_PATH,
-            headless: false,
-            args: ['--disable-blink-features=AutomationControlled', '--no-sandbox'],
-            ignoreDefaultArgs: ['--enable-automation'],
-        });
-
-        const page = browser.pages()[0] || await browser.newPage();
-        await page.goto('https://www.doordash.com/login/', { waitUntil: 'domcontentloaded' });
-
-        console.log(`\n✅ Chrome opened for ${target.email}`);
-        console.log('   1. Log in to this specific account.');
-        console.log('   2. Once you see the homepage, press Enter here.');
-
-        await ask('\nPress Enter once logged in...');
-
-        const cookies = await browser.cookies('https://www.doordash.com');
-        const cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ');
-
-        await browser.close();
-
-        if (!cookieStr || cookieStr.length < 50) {
-            console.error('❌ No cookies found for this account. Skipping.');
-            continue;
-        }
-
-        // Update accounts array
-        const idx = accounts.findIndex(a => a.email === target.email);
-        if (idx !== -1) {
-            accounts[idx].cookies = cookieStr;
-            accounts[idx].banned = false;
-        } else {
-            accounts.push({ 
-                email: target.email, 
-                label: target.label, 
-                cookies: cookieStr, 
-                last_used: 0, 
-                request_count: 0, 
-                banned: false 
+            browser = await chromium.launchPersistentContext(TEMP_PROFILE, {
+                executablePath: CHROME_PATH,
+                headless: false,
+                args: ['--disable-blink-features=AutomationControlled', '--no-sandbox'],
+                ignoreDefaultArgs: ['--enable-automation'],
             });
-        }
 
-        fs.writeFileSync(ACCOUNTS_PATH, JSON.stringify(accounts, null, 2));
-        console.log(`✅ Saved cookies for ${target.email}`);
+            // Handle Ctrl+C cleanup
+            const cleanup = async () => {
+                if (browser) await browser.close();
+                process.exit();
+            };
+            process.on('SIGINT', cleanup);
+
+            const page = browser.pages()[0] || await browser.newPage();
+            await page.goto('https://www.doordash.com/login/', { waitUntil: 'domcontentloaded' });
+
+            console.log(`\n✅ Chrome opened for ${target.email}`);
+            console.log('   1. Log in to this specific account.');
+            console.log('   2. Once you see the homepage, press Enter here.');
+            console.log('   (Or Ctrl+C to stop and save progress)');
+
+            await ask('\nPress Enter once logged in...');
+
+            const cookies = await browser.cookies('https://www.doordash.com');
+            const cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+
+            await browser.close();
+            process.off('SIGINT', cleanup);
+            browser = null;
+
+            if (!cookieStr || cookieStr.length < 50) {
+                console.error('❌ No cookies found for this account. Skipping.');
+                continue;
+            }
+
+            // Update accounts array
+            const idx = accounts.findIndex(a => a.email === target.email);
+            if (idx !== -1) {
+                accounts[idx].cookies = cookieStr;
+                accounts[idx].banned = false;
+            } else {
+                accounts.push({ 
+                    email: target.email, 
+                    label: target.label, 
+                    cookies: cookieStr, 
+                    last_used: 0, 
+                    request_count: 0, 
+                    banned: false 
+                });
+            }
+
+            fs.writeFileSync(ACCOUNTS_PATH, JSON.stringify(accounts, null, 2));
+            console.log(`✅ Saved cookies for ${target.email}`);
+        }
+    } finally {
+        if (browser) await browser.close();
+        rl.close();
     }
 
-    rl.close();
     console.log(`\n✨ Finished. Total active accounts in pool: ${accounts.filter(a => a.cookies && !a.banned).length}\n`);
 }
 
