@@ -20,7 +20,7 @@ function getJwtExpiry(cookies) {
     return null;
 }
 
-function main() {
+async function main() {
     if (!fs.existsSync(ACCOUNTS_PATH)) {
         console.log('No accounts.json found. Run: npm run export-cookies');
         return;
@@ -124,4 +124,7 @@ function main() {
     }
 }
 
-main();
+main().catch(err => {
+    console.error('Fatal error:', err.message);
+    process.exit(1);
+});
