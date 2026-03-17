@@ -24,8 +24,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Playwright Browsers
-        run: npx playwright install --with-deps chromium
+
 
       - name: Run Script
         run: npx tsx scripts/build_locations_csv.ts
