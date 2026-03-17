@@ -172,6 +172,15 @@ function App() {
             </div>
           ) : null}
         </div>
+        {stats && (stats.health.includes("HTTP 401") || stats.health.includes("HTTP 403")) && (
+          <div className="cookie-alert-banner">
+            <span className="cookie-alert-icon">⚠️</span>
+            <div className="cookie-alert-text">
+              <strong>DoorDash Cookies Expired</strong>
+              <span>Scraping is currently blocked. Run <code>npm run export-cookies</code> locally, followed by <code>npm run push-secrets</code> to renew.</span>
+            </div>
+          </div>
+        )}
       </header>
 
       <div className="metrics-grid">

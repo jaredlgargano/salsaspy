@@ -496,3 +496,45 @@ h1 {
   font-size: 0.75rem;
   color: var(--text-muted);
 }
+
+/* Cookie Alert Banner */
+.cookie-alert-banner {
+  margin-top: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: rgba(244, 63, 94, 0.1);
+  border: 1px solid rgba(244, 63, 94, 0.4);
+  border-radius: 0.75rem;
+  padding: 1rem 1.5rem;
+  color: var(--text-main);
+  animation: pulse 2.5s infinite;
+}
+
+.cookie-alert-icon {
+  font-size: 1.5rem;
+}
+
+.cookie-alert-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.cookie-alert-text strong {
+  color: var(--accent-rose);
+  font-size: 1rem;
+}
+
+.cookie-alert-text span {
+  font-size: 0.875rem;
+  color: #e2e8f0;
+}
+
+.cookie-alert-text code {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 0.15rem 0.35rem;
+  border-radius: 4px;
+  font-family: inherit;
+  color: #fca5a5;
+}
