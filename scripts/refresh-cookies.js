@@ -121,8 +121,46 @@ async function main() {
         if (i < active.length - 1) await new Promise(r => setTimeout(r, 2000));
     }
 
+
     fs.writeFileSync(ACCOUNTS_PATH, JSON.stringify(allAccounts, null, 2));
     console.log('\n✅ accounts.json updated.');
+
+    // --- Sync with Remote API ---
+    const apiUrl = process.env.API_URL || 'https://doordash-scraper-api.uberscraper.workers.dev';
+    const apiKey = process.env.API_KEY || process.env.SCRAPER_API_KEY;
+
+    if (apiKey) {
+        console.log(`  🔄 Syncing updated health to ${apiUrl}...`);
+        const payload = allAccounts.filter(a => !a._comment).map(a => {
+            const exp = getJwtExpiry(a.cookies || '');
+            let status = 'Active';
+            if (a.banned) status = 'Banned';
+            else if (!a.cookies) status = 'No Cookies';
+            else if (!exp || exp < new Date()) status = 'Expired';
+            else if ((exp.getTime() - Date.now()) / (1000 * 60 * 60 * 24) <= 3) status = 'Expiring Soon';
+
+            return {
+                email: a.email,
+                label: a.label,
+                status: status,
+                expiry_at: exp ? exp.toISOString() : null
+            };
+        });
+
+        try {
+            const res = await fetch(`${apiUrl}/v1/status/cookies/sync`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify({ accounts: payload })
+            });
+            if (res.ok) console.log('  ✅ Remote dashboard sync complete.');
+        } catch (err) {
+            console.error(`  ❌ Sync error: ${err.message}`);
+        }
+    }
 
     if (reloginNeeded.length > 0) {
         console.log(`\n⚠️  The following accounts need manual re-login:`);

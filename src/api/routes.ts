@@ -109,6 +109,35 @@ export function setupRoutes(app: Hono<{ Bindings: ApiEnv }>) {
         });
     });
 
+    // Cookie Health Status
+    app.get("/v1/status/cookies", async (c) => {
+        const result = await c.env.DB.prepare("SELECT * FROM cookie_status ORDER BY last_checked_at DESC").all();
+        return c.json({ accounts: result.results || [] });
+    });
+
+    app.post("/v1/status/cookies/sync", async (c) => {
+        // Auth check - simplified for now, should ideally use the scraper key
+        const apiKey = c.req.header("Authorization")?.replace("Bearer ", "");
+        if (apiKey !== c.env.SCRAPER_API_KEY && apiKey !== c.env.API_KEY) {
+            return c.json({ error: "Unauthorized" }, 401);
+        }
+
+        const { accounts } = await c.req.json() as { accounts: any[] };
+        
+        for (const acc of accounts) {
+            await c.env.DB.prepare(`
+                INSERT INTO cookie_status (email, label, status, expiry_at, last_checked_at)
+                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(email) DO UPDATE SET
+                    status = excluded.status,
+                    expiry_at = excluded.expiry_at,
+                    last_checked_at = CURRENT_TIMESTAMP
+            `).bind(acc.email, acc.label, acc.status, acc.expiry_at).run();
+        }
+
+        return c.json({ success: true });
+    });
+
     // Markets
     app.get("/v1/markets", async (c) => {
         const active = c.req.query("active") === "1" ? 1 : 0;

@@ -59,6 +59,7 @@ function main() {
         console.log(`  ${statusIcon} ${account.email.padEnd(38)} ${statusText.padEnd(18)} ${expiryText}`);
     }
 
+
     const active = accounts.filter(a => {
         if (a.banned || !a.cookies) return false;
         const exp = getJwtExpiry(a.cookies);
@@ -70,10 +71,56 @@ function main() {
         const exp = getJwtExpiry(a.cookies || '');
         return exp && exp < new Date();
     });
+    
     if (needsRefresh.length > 0) {
         console.log(`  ⚠️  ${needsRefresh.length} account(s) need refreshing. Run: npm run export-cookies\n`);
     } else {
         console.log(`  ✅ All cookies are valid!\n`);
+    }
+
+    // --- Sync with Remote API ---
+    const apiUrl = process.env.API_URL || 'https://doordash-scraper-api.uberscraper.workers.dev';
+    const apiKey = process.env.API_KEY || process.env.SCRAPER_API_KEY;
+
+    if (!apiKey) {
+        console.log('  ℹ️  Skipping remote sync (no API_KEY found in environment).');
+        return;
+    }
+
+    console.log(`  🔄 Syncing health to ${apiUrl}...`);
+
+    const payload = accounts.map(a => {
+        const expiry = getJwtExpiry(a.cookies || '');
+        let status = 'Active';
+        if (a.banned) status = 'Banned';
+        else if (!a.cookies) status = 'No Cookies';
+        else if (!expiry || expiry < new Date()) status = 'Expired';
+        else if ((expiry.getTime() - now) / (1000 * 60 * 60 * 24) <= 3) status = 'Expiring Soon';
+
+        return {
+            email: a.email,
+            label: a.label,
+            status: status,
+            expiry_at: expiry ? expiry.toISOString() : null
+        };
+    });
+
+    try {
+        const res = await fetch(`${apiUrl}/v1/status/cookies/sync`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({ accounts: payload })
+        });
+        if (res.ok) {
+            console.log('  ✅ Dashboard updated successfully.');
+        } else {
+            console.error(`  ❌ Failed to sync: ${res.status} ${await res.text()}`);
+        }
+    } catch (err) {
+        console.error(`  ❌ Sync error: ${err.message}`);
     }
 }
 

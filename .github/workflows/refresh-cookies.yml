@@ -35,6 +35,9 @@ jobs:
 
       - name: Refresh cookies
         id: refresh
+        env:
+          API_URL: https://doordash-scraper-api.uberscraper.workers.dev
+          API_KEY: ${{ secrets.SCRAPER_API_KEY }}
         run: node scripts/refresh-cookies.js
         continue-on-error: true
 
