@@ -27,53 +27,97 @@ async function main() {
 
     console.log('\n🍕 DoorDash Cookie Exporter\n');
 
-    const email = await ask('Email address for this account: ');
-    const label = await ask('Label (e.g. account-1): ');
-
-    console.log('\nLaunching Chrome...\n');
-
-    const browser = await chromium.launchPersistentContext(TEMP_PROFILE, {
-        executablePath: CHROME_PATH,
-        headless: false,
-        args: [
-            '--disable-blink-features=AutomationControlled',
-            '--no-sandbox',
-        ],
-        ignoreDefaultArgs: ['--enable-automation'],
-    });
-
-    const page = browser.pages()[0] || await browser.newPage();
-    await page.goto('https://www.doordash.com/login/', { waitUntil: 'domcontentloaded' });
-
-    console.log('✅ Chrome opened — log in to your DoorDash account.');
-    console.log('   Once you can see the DoorDash homepage, press Enter here.\n');
-
-    await ask('Press Enter once logged in...');
-
-    const cookies = await browser.cookies('https://www.doordash.com');
-    const cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ');
-
-    await browser.close();
-    rl.close();
-
-    if (!cookieStr || cookieStr.length < 50) {
-        console.error('\n❌ No cookies found. Did you complete the login?');
-        process.exit(1);
-    }
-
-    // Load & update accounts.json
+    // Load existing accounts
     let accounts = [];
     if (fs.existsSync(ACCOUNTS_PATH)) {
-        try { accounts = JSON.parse(fs.readFileSync(ACCOUNTS_PATH, 'utf-8')); } catch {}
+        try { accounts = JSON.parse(fs.readFileSync(ACCOUNTS_PATH, 'utf-8')).filter(a => !a._comment); } catch {}
     }
 
-    accounts = accounts.filter(a => !a._comment && a.email !== email);
-    accounts.push({ email, label, cookies: cookieStr, last_used: 0, request_count: 0, banned: false });
+    const expired = accounts.filter(a => {
+        const exp = getJwtExpiry(a.cookies || '');
+        return !exp || exp < new Date();
+    });
 
-    fs.writeFileSync(ACCOUNTS_PATH, JSON.stringify(accounts, null, 2));
+    let queue = [];
 
-    console.log(`\n✅ Saved cookies for ${email}`);
-    console.log(`   Total accounts in pool: ${accounts.filter(a => a.cookies && !a.banned).length}\n`);
+    if (expired.length > 0) {
+        console.log(`ℹ️  Detected ${expired.length} expired or missing account(s).`);
+        const mode = await ask(`Use "Smart Renew" to iterate through them? (Y/n): `);
+        if (mode.toLowerCase() !== 'n') {
+            queue = expired;
+        }
+    }
+
+    if (queue.length === 0) {
+        const email = await ask('Email address for manual entry: ');
+        const label = await ask('Label (e.g. account-1): ');
+        queue = [{ email, label, manual: true }];
+    }
+
+    for (const target of queue) {
+        console.log(`\n--- Processing: ${target.email} (${target.label || 'New'}) ---`);
+        console.log('Launching Chrome...');
+
+        const browser = await chromium.launchPersistentContext(TEMP_PROFILE, {
+            executablePath: CHROME_PATH,
+            headless: false,
+            args: ['--disable-blink-features=AutomationControlled', '--no-sandbox'],
+            ignoreDefaultArgs: ['--enable-automation'],
+        });
+
+        const page = browser.pages()[0] || await browser.newPage();
+        await page.goto('https://www.doordash.com/login/', { waitUntil: 'domcontentloaded' });
+
+        console.log(`\n✅ Chrome opened for ${target.email}`);
+        console.log('   1. Log in to this specific account.');
+        console.log('   2. Once you see the homepage, press Enter here.');
+
+        await ask('\nPress Enter once logged in...');
+
+        const cookies = await browser.cookies('https://www.doordash.com');
+        const cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+
+        await browser.close();
+
+        if (!cookieStr || cookieStr.length < 50) {
+            console.error('❌ No cookies found for this account. Skipping.');
+            continue;
+        }
+
+        // Update accounts array
+        const idx = accounts.findIndex(a => a.email === target.email);
+        if (idx !== -1) {
+            accounts[idx].cookies = cookieStr;
+            accounts[idx].banned = false;
+        } else {
+            accounts.push({ 
+                email: target.email, 
+                label: target.label, 
+                cookies: cookieStr, 
+                last_used: 0, 
+                request_count: 0, 
+                banned: false 
+            });
+        }
+
+        fs.writeFileSync(ACCOUNTS_PATH, JSON.stringify(accounts, null, 2));
+        console.log(`✅ Saved cookies for ${target.email}`);
+    }
+
+    rl.close();
+    console.log(`\n✨ Finished. Total active accounts in pool: ${accounts.filter(a => a.cookies && !a.banned).length}\n`);
+}
+
+function getJwtExpiry(cookies) {
+    if (!cookies) return null;
+    const match = cookies.match(/ddweb_token=([A-Za-z0-9._-]+)/);
+    if (!match) return null;
+    try {
+        const payload = match[1].split('.')[1];
+        const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf-8'));
+        if (decoded.exp) return new Date(decoded.exp * 1000);
+    } catch {}
+    return null;
 }
 
 main().catch(err => {
