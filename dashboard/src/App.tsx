@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Activity, Clock, Database, MapPin, ServerCrash, BarChart2, TrendingDown } from 'lucide-react';
+import { Activity, Clock, Database, MapPin, ServerCrash, BarChart2, TrendingDown, Shield } from 'lucide-react';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
@@ -26,6 +26,7 @@ const API_BASE = 'https://doordash-scraper-api.uberscraper.workers.dev';
 function App() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [healthMetrics, setHealthMetrics] = useState<any[]>([]);
+  const [cookieStatus, setCookieStatus] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   // Chart State
@@ -74,6 +75,11 @@ function App() {
         const healthRes = await fetch(`${API_BASE}/v1/health-metrics`);
         const healthData = await healthRes.json();
         setHealthMetrics(healthData.metrics || []);
+
+        // Fetch cookie status
+        const cookieRes = await fetch(`${API_BASE}/v1/status/cookies`);
+        const cookieData = await cookieRes.json();
+        setCookieStatus(cookieData.accounts || []);
 
         setError(null);
       } catch (err: any) {
@@ -172,12 +178,15 @@ function App() {
             </div>
           ) : null}
         </div>
-        {stats && (stats.health.includes("HTTP 401") || stats.health.includes("HTTP 403")) && (
+        {stats && (stats.health.includes("HTTP 401") || stats.health.includes("HTTP 403") || cookieStatus.some(a => a.status === 'Expired')) && (
           <div className="cookie-alert-banner">
             <span className="cookie-alert-icon">⚠️</span>
             <div className="cookie-alert-text">
               <strong>DoorDash Cookies Expired</strong>
-              <span>Scraping is currently blocked. Run <code>npm run export-cookies</code> locally, followed by <code>npm run push-secrets</code> to renew.</span>
+              <span>
+                {cookieStatus.filter(a => a.status === 'Expired').map(a => a.label || a.email).join(', ')} expired. 
+                Run <code>npm run export-cookies</code> locally, followed by <code>npm run push-secrets</code> to renew.
+              </span>
             </div>
           </div>
         )}
@@ -232,6 +241,23 @@ function App() {
             <>
               <div className="metric-value">{stats.totalObservations.toLocaleString()}</div>
               <div className="metric-sub">Rows in D1 Data Warehouse</div>
+            </>
+          ) : <div className="loading-skeleton"></div>}
+        </div>
+        <div className="metric-card">
+          <div className="metric-header">
+            <Shield className="metric-icon" size={18} /> Cookie Health
+          </div>
+          {cookieStatus.length > 0 ? (
+            <>
+              <div className={`metric-value ${cookieStatus.every(a => a.status === 'Active') ? 'text-emerald' : 'text-rose'}`}>
+                {cookieStatus.filter(a => a.status === 'Active' || a.status === 'Expiring Soon').length} / {cookieStatus.length}
+              </div>
+              <div className="metric-sub">
+                {cookieStatus.some(a => a.status === 'Expiring Soon') 
+                  ? `⚠️ ${cookieStatus.find(a => a.status === 'Expiring Soon').label || 'Account'} expires in ${Math.ceil((new Date(cookieStatus.find(a => a.status === 'Expiring Soon').expiry_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24))}d`
+                  : 'All sessions healthy'}
+              </div>
             </>
           ) : <div className="loading-skeleton"></div>}
         </div>
