@@ -127,15 +127,19 @@ export function setupRoutes(app: Hono<{ Bindings: ApiEnv }>) {
 
         const { accounts } = await c.req.json() as { accounts: any[] };
         
-        for (const acc of accounts) {
-            await c.env.DB.prepare(`
+        // Full sync: clear existing and re-insert
+        await c.env.DB.prepare("DELETE FROM cookie_status").run();
+        
+        if (accounts.length > 0) {
+            const stmt = c.env.DB.prepare(`
                 INSERT INTO cookie_status (email, label, status, expiry_at, last_checked_at)
                 VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(email) DO UPDATE SET
-                    status = excluded.status,
-                    expiry_at = excluded.expiry_at,
-                    last_checked_at = CURRENT_TIMESTAMP
-            `).bind(acc.email, acc.label, acc.status, acc.expiry_at).run();
+            `);
+            
+            // Batching would be better for many accounts, but for < 100 this is fine
+            for (const acc of accounts) {
+                await stmt.bind(acc.email, acc.label, acc.status, acc.expiry_at).run();
+            }
         }
 
         return c.json({ success: true });
