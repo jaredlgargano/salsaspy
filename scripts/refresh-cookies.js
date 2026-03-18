@@ -19,6 +19,9 @@ const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 
+// Load local .dev.vars if running outside GitHub Actions (override stale shell env vars)
+try { require('dotenv').config({ path: path.resolve(__dirname, '..', '.dev.vars'), override: true }); } catch {}
+
 const ACCOUNTS_PATH = path.resolve(__dirname, '..', 'accounts.json');
 const CHROME_PATH = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const TEMP_PROFILE_BASE = require('os').tmpdir();

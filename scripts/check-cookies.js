@@ -7,6 +7,9 @@
 const fs = require('fs');
 const path = require('path');
 
+// Load local .dev.vars if running outside GitHub Actions (override stale shell env vars)
+try { require('dotenv').config({ path: require('path').resolve(__dirname, '..', '.dev.vars'), override: true }); } catch {}
+
 const ACCOUNTS_PATH = path.resolve(__dirname, '..', 'accounts.json');
 
 function getJwtExpiry(cookies) {
