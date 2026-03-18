@@ -32,7 +32,8 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
     const baseAgent = proxyUrl ? new HttpsProxyAgent(proxyUrl) : undefined;
 
     // 1. Fetch Markets
-    const marketRes = await fetch(`${apiUrl}/v1/markets?shard=${manualShard}&shards_total=${SHARDS_TOTAL}&active=1`, {
+    // Use unscraped_only=1 to ensure we don't double-scrape markets during the broadened window
+    const marketRes = await fetch(`${apiUrl}/v1/markets?shard=${manualShard}&shards_total=${SHARDS_TOTAL}&active=1&unscraped_only=1`, {
         headers: { 'Authorization': `Bearer ${apiKey}` }
     });
     
@@ -49,11 +50,11 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
     const myMarkets = allMarkets.filter((m: any) => {
         // Sharding is now handled by the API query
         
-        // Timezone check for 12:00 PM (12:00 - 12:59)
+        // Timezone check for 12:00 PM or 1:00 PM (to account for GitHub Action delays)
         const tz = STATE_TZ[m.state] || 'America/New_York';
         const localHour = parseInt(new Intl.DateTimeFormat('en-US', { hour: 'numeric', hour12: false, timeZone: tz }).format(now));
 
-        return localHour === 12; // Only scrape during the 12:00 PM local hour
+        return localHour === 12 || localHour === 13;
     });
 
     console.log(`Found ${myMarkets.length} markets for shard ${manualShard} at local 12:00 PM`);

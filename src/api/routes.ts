@@ -116,11 +116,12 @@ export function setupRoutes(app: Hono<{ Bindings: ApiEnv }>) {
     });
 
     app.post("/v1/status/cookies/sync", async (c) => {
-        const serverKey = c.env.SCRAPER_API_KEY || c.env.API_KEY;
         const clientKey = c.req.header("Authorization")?.replace("Bearer ", "");
+        const isAuthorized = (c.env.API_KEY && clientKey === c.env.API_KEY) || 
+                             (c.env.SCRAPER_API_KEY && clientKey === c.env.SCRAPER_API_KEY);
         
-        if (!serverKey || clientKey !== serverKey) {
-            console.error(`Sync unauthorized. Server key set: ${!!serverKey}`);
+        if (!isAuthorized) {
+            console.error(`Sync unauthorized. Client key provided: ${!!clientKey}`);
             return c.json({ error: "Unauthorized" }, 401);
         }
 
@@ -143,15 +144,28 @@ export function setupRoutes(app: Hono<{ Bindings: ApiEnv }>) {
     // Markets
     app.get("/v1/markets", async (c) => {
         const active = c.req.query("active") === "1" ? 1 : 0;
-        let query = "SELECT *, rowid FROM markets";
-        const params: any[] = [];
         const shard = c.req.query("shard");
         const totalShards = c.req.query("shards_total");
+        const unscrapedOnly = c.req.query("unscraped_only") === "1";
 
+        let query = "SELECT m.*, m.rowid FROM markets m";
+        const params: any[] = [];
         const conditions = [];
 
+        if (unscrapedOnly) {
+            query = `
+                SELECT m.*, m.rowid FROM markets m
+                LEFT JOIN (
+                    SELECT market_id, MAX(observed_at) as last_obs
+                    FROM observations
+                    GROUP BY market_id
+                ) o ON m.market_id = o.market_id
+            `;
+            conditions.push("(o.last_obs IS NULL OR o.last_obs < datetime('now', '-18 hours'))");
+        }
+
         if (c.req.query("active") !== undefined) {
-            conditions.push("active = ?");
+            conditions.push("m.active = ?");
             params.push(active);
         }
 
@@ -161,7 +175,7 @@ export function setupRoutes(app: Hono<{ Bindings: ApiEnv }>) {
             const shardNum = parseInt(shard as string, 10);
             const totalShardsNum = parseInt(totalShards as string, 10);
             if (!isNaN(shardNum) && !isNaN(totalShardsNum) && totalShardsNum > 0) {
-                conditions.push(`(rowid % ?) = ?`);
+                conditions.push(`(m.rowid % ?) = ?`);
                 params.push(totalShardsNum, shardNum);
             }
         }
@@ -368,8 +382,13 @@ export function setupRoutes(app: Hono<{ Bindings: ApiEnv }>) {
 
     // Middleware for API Key
     const authMiddleware = async (c: any, next: any) => {
-        const key = c.req.header("Authorization")?.replace("Bearer ", "") || c.req.query("key");
-        if (!c.env.API_KEY || key !== c.env.API_KEY) {
+        const clientKey = c.req.header("Authorization")?.replace("Bearer ", "") || c.req.query("key");
+        
+        const isAuthorized = (c.env.API_KEY && clientKey === c.env.API_KEY) || 
+                             (c.env.SCRAPER_API_KEY && clientKey === c.env.SCRAPER_API_KEY);
+
+        if (!isAuthorized) {
+            console.error(`Unauthorized access attempt. Key provided: ${!!clientKey}`);
             return c.json({ error: "Unauthorized" }, 401);
         }
         await next();
