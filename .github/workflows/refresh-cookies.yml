@@ -33,6 +33,9 @@ jobs:
           echo "${{ secrets.DOORDASH_ACCOUNTS }}" | base64 -d > accounts.json
           echo "Loaded $(node -e "console.log(JSON.parse(require('fs').readFileSync('accounts.json','utf-8')).filter(a=>!a._comment).length)") accounts"
 
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps chromium
+
       - name: Refresh cookies
         id: refresh
         env:
