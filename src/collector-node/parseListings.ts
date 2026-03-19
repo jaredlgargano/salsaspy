@@ -37,37 +37,86 @@ export function parseListings(html: string): ParseResult {
     const $ = cheerio.load(html);
     let rank = 1;
 
-    // 3. Try to extract from __NEXT_DATA__ JSON first (more robust)
-    const nextDataJson = $('#__NEXT_DATA__').html();
-    if (nextDataJson) {
-        try {
-            const parsed = JSON.parse(nextDataJson);
-            // Traverse the complex DoorDash state tree
-            // Based on the test case: props.pageProps.items
-            const items = parsed.props?.pageProps?.items || [];
-            if (Array.isArray(items)) {
-                items.forEach((item: any) => {
-                    const name = item.name || item.merchant_name;
-                    if (!name) return;
-
-                    merchants.push({
-                        merchant_name: name.trim(),
-                        rank: rank++,
-                        is_sponsored: !!item.isSponsored || !!item.is_sponsored,
-                        has_discount: !!(item.offers?.length > 0) || !!item.has_discount,
-                        offer_title: item.offers?.[0]?.title || item.offer_title || null,
-                        raw_snippet: JSON.stringify(item).substring(0, 200),
-                        store_id: item.id || item.store_id || null,
-                        discount_type: null,
-                        delivery_fee: null,
-                        rating: item.rating || null,
-                        review_count: item.review_count || null
-                    });
-                });
+    // 3. Try to extract from Hydration Scripts (RSC / Apollo / __NEXT_DATA__)
+    const scripts = $('script');
+    scripts.each((idx, s) => {
+        const content = $(s).html() || '';
+        if (content.includes('__NEXT_DATA__') || content.includes('self.__next_f.push') || content.includes('__APOLLO_STATE__')) {
+            try {
+                // If it's pure __NEXT_DATA__
+                if (content.includes('__NEXT_DATA__')) {
+                    const parsed = JSON.parse(content);
+                    const items = parsed.props?.pageProps?.items || [];
+                    if (Array.isArray(items)) {
+                        items.forEach((item: any) => {
+                            addMerchantFromData(item);
+                        });
+                    }
+                } 
+                // If it's the new RSC push format
+                else if (content.includes('self.__next_f.push')) {
+                    const matches = content.matchAll(/self\.__next_f\.push\(\[\d+,\"(.*?)\"\]\)/g);
+                    for (const match of matches) {
+                        let jsonStr = match[1];
+                        // Unescape the hydration string - very important for RSC
+                        jsonStr = jsonStr.replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+                        try {
+                            const data = JSON.parse(jsonStr);
+                            if (data && typeof data === 'object') {
+                                if (data.store_id || data.business_id) {
+                                    addMerchantFromData(data);
+                                } else if (Array.isArray(data.items)) {
+                                    data.items.forEach((i: any) => addMerchantFromData(i));
+                                } else if (typeof data.children === 'object') {
+                                    // Recurse into children for RSC trees
+                                    findMerchantsNested(data);
+                                }
+                            }
+                        } catch (e) {
+                            // Skip fragments that aren't valid standalone JSON
+                        }
+                    }
+                }
+            } catch (e) {
+                // Silently skip malformed JSON fragments
             }
-        } catch (e) {
-            console.warn("Failed to parse __NEXT_DATA__:", e);
         }
+    });
+
+    function findMerchantsNested(obj: any) {
+        if (!obj || typeof obj !== 'object') return;
+        if (obj.store_id || obj.business_id) {
+            addMerchantFromData(obj);
+            return;
+        }
+        if (Array.isArray(obj)) {
+            obj.forEach(i => findMerchantsNested(i));
+        } else {
+            Object.values(obj).forEach(v => findMerchantsNested(v));
+        }
+    }
+
+    function addMerchantFromData(item: any) {
+        const name = item.store_name || item.merchant_name || item.name;
+        const store_id = item.store_id || item.business_id || item.id;
+        if (!name || !store_id) return;
+        
+        // Deduplicate
+        if (merchants.some(m => m.store_id === String(store_id))) return;
+
+        merchants.push({
+            merchant_name: String(name).trim(),
+            rank: rank++,
+            is_sponsored: !!(item.is_sponsored || item.isSponsored),
+            has_discount: !!(item.has_discount || (item.offers && item.offers.length > 0)),
+            offer_title: item.offer_title || (item.offers && item.offers[0]?.title) || item.delivery_fee_str || null,
+            raw_snippet: JSON.stringify(item).substring(0, 200),
+            store_id: String(store_id),
+            discount_type: item.discount_type || null,
+            delivery_fee: String(item.delivery_fee || item.delivery_fee_amount || ""),
+            rating: item.star_rating || item.rating || null,
+            review_count: item.num_star_rating || item.review_count || null
+        });
     }
 
     if (merchants.length > 0) {

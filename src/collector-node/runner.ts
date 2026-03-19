@@ -203,8 +203,8 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
             });
         }
 
-        // Best of Lunch
-        const lunchUrl = `https://www.doordash.com/home/?lat=${market.latitude}&lng=${market.longitude}`;
+        // Best of Lunch - Use the search-based path which is more reliable than /home/
+        const lunchUrl = `https://www.doordash.com/search/store/best%20of%20lunch/?lat=${market.latitude}&lng=${market.longitude}`;
 
         requestQueue.push(async () => {
             let attempts = 0;
