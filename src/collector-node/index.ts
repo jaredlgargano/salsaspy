@@ -26,9 +26,14 @@ async function start() {
     console.log(`Run ID: ${runId}`);
     console.log(`Base Run ID for grouping: ${baseRunId}`);
 
-    await runShard(API_URL, API_KEY, now, runId, shard);
+    const status = await runShard(API_URL, API_KEY, now, runId, shard);
+    console.log(`Collection complete. Status: ${status}`);
 
-    console.log("Collection complete. Exiting.");
+    if (status === "FAILED") {
+        console.error("Critical: Every request in this shard failed. Exiting with error.");
+        process.exit(1);
+    }
+    
     process.exit(0);
 }
 

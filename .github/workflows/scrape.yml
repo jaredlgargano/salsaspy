@@ -63,3 +63,20 @@ jobs:
           SHARD: ${{ github.event.inputs.shard || matrix.shard }}
           SHARDS_TOTAL: 100
         run: npm run scrape
+
+      - name: Persist banned account status
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          if [ -f accounts.json ]; then
+            # Sync health back to secret only if changes occurred
+            ENCODED=$(base64 -w 0 accounts.json)
+            # We compare with the original secret to avoid unnecessary updates
+            if [ "$ENCODED" != "${{ secrets.DOORDASH_ACCOUNTS }}" ]; then
+              gh secret set DOORDASH_ACCOUNTS --body "$ENCODED" --repo ${{ github.repository }}
+              echo "✅ Updated DOORDASH_ACCOUNTS secret with newly detected bans/expirations"
+            else
+              echo "No changes to accounts status."
+            fi
+          fi

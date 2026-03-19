@@ -85,7 +85,8 @@ async function refreshAccount(account, index) {
 
         if (!isLoggedIn) {
             console.log(`  ⚠️  Session expired for ${account.email} — manual re-login required ('npm run export-cookies')`);
-            account.banned = false; // Don't ban, just flag as needing refresh
+            // Do NOT overwrite 'banned' status here. If it was banned in the scraper, 
+            // it stays banned until manually refreshed or proven active.
             return { ...account, cookies: account.cookies, needsRelogin: true };
         }
 

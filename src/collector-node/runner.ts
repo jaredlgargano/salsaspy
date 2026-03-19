@@ -21,7 +21,7 @@ const STATE_TZ: Record<string, string> = {
     'WI': 'America/Chicago', 'WY': 'America/Denver', 'DC': 'America/New_York'
 };
 
-export async function runShard(apiUrl: string, apiKey: string, now: Date, runId: string, manualShard: number) {
+export async function runShard(apiUrl: string, apiKey: string, now: Date, runId: string, manualShard: number): Promise<string> {
     console.log(`Fetching active markets from ${apiUrl}`);
 
     // Dynamic import for pure ESM got-scraping package
@@ -41,7 +41,7 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
         console.error(`Failed to fetch markets: ${marketRes.status} ${marketRes.statusText}`);
         const text = await marketRes.text();
         console.error(`Response body: ${text}`);
-        return;
+        return "FAILED";
     }
 
     const { markets } = await marketRes.json() as { markets: any[] };
@@ -124,9 +124,12 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
 
                         // If account was flagged, mark it banned and retry unauthenticated
                         if (res.statusCode === 401 || res.statusCode === 403) {
-                            if (cookies) {
+                            const isBan = res.statusCode === 401 || res.body.includes('login') || res.body.includes('verification');
+                            if (cookies && isBan) {
                                 markBanned(cookies);
-                                console.log(` -> Account flagged, marked as banned. Retrying unauthenticated...`);
+                                console.log(` -> Account flagged (Status ${res.statusCode}), marked as banned. Retrying unauthenticated...`);
+                            } else if (res.statusCode === 403) {
+                                console.log(` -> HTTP 403 (Forbidden) received. This might be a proxy/IP block. Not marking account as banned yet.`);
                             }
                             throw new Error(`HTTP ${res.statusCode}`);
                         }
@@ -316,4 +319,6 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
     console.log(`Ingesting ${observations.length} observations to API...`);
     await pushToApi(apiUrl, apiKey, runData, observations);
     console.log(`Ingest complete. Status: ${finalStatus}`);
+    
+    return finalStatus;
 }
