@@ -124,9 +124,14 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                         const res = await gotScraping({
                             url: url,
                             headerGeneratorOptions: { browsers: ['chrome'], os: ['macos'] },
-                            headers,
+                            headers: {
+                                ...headers,
+                                'Referer': 'https://www.doordash.com/',
+                                'Origin': 'https://www.doordash.com',
+                                'Accept-Language': 'en-US,en;q=0.9',
+                            },
                             agent: currentAgent ? { https: currentAgent, http: currentAgent } : undefined,
-                            timeout: { request: 15000 }
+                            timeout: { request: 20000 }
                         });
 
                         // If account was flagged, mark it banned and retry unauthenticated
@@ -190,7 +195,8 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                                 console.log(` -> Failed parse ${category} in ${market.city} after 10 attempts: ${result.status}`);
                             } else {
                                 console.log(` -> Failed parse ${category} in ${market.city}: ${result.status} (Attempt ${attempts}/10). Retrying...`);
-                                await new Promise(r => setTimeout(r, 1000));
+                                // Increased jitter between retries
+                                await new Promise(r => setTimeout(r, 2000 + Math.random() * 2000));
                             }
                         }
                     } catch (e: any) {
