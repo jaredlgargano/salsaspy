@@ -80,9 +80,11 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
 
                 while (attempts < 5 && !success) {
                     attempts++;
+                    const proxy = process.env.PROXY_URL || getRandomProxy();
                     const context = await browser.newContext({
                         userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-                        viewport: { width: 1280, height: 800 }
+                        viewport: { width: 1280, height: 800 },
+                        proxy: proxy ? { server: proxy } : undefined
                     });
 
                     try {
@@ -166,7 +168,11 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
 
             while (lAttempts < 5 && !lSuccess) {
                 lAttempts++;
-                const lContext = await browser.newContext({ userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36' });
+                const lProxy = process.env.PROXY_URL || getRandomProxy();
+                const lContext = await browser.newContext({ 
+                    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                    proxy: lProxy ? { server: lProxy } : undefined
+                });
                 try {
                     const lCookies = getNextCookies();
                     if (lCookies) {
