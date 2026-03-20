@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 
 const ACCOUNTS_PATH = path.resolve(process.cwd(), 'accounts.json');
-const MAX_REQUESTS_PER_ACCOUNT_PER_DAY = 50;
+const MAX_REQUESTS_PER_ACCOUNT_PER_DAY = 1000;
 const EXPIRY_WARNING_DAYS = 3;
 
 /** Decode a JWT and return its expiry Date, or null if unparseable. */
@@ -75,9 +75,11 @@ export function getNextCookies(): string | null {
     const now = Date.now();
     const oneDayMs = 24 * 60 * 60 * 1000;
 
-    // Reset daily request counts
+    // Reset daily request counts if the day has changed
+    const today = new Date().toDateString();
     for (const a of accounts) {
-        if (now - a.last_used > oneDayMs) {
+        const lastDate = new Date(a.last_used).toDateString();
+        if (lastDate !== today) {
             a.request_count = 0;
         }
     }
