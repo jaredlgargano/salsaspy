@@ -41,10 +41,11 @@ export function parseListings(html: string): ParseResult {
     const scripts = $('script');
     scripts.each((idx, s) => {
         const content = $(s).html() || '';
-        if (content.includes('__NEXT_DATA__') || content.includes('self.__next_f.push') || content.includes('__APOLLO_STATE__')) {
+        const scriptId = $(s).attr('id') || '';
+        if (scriptId === '__NEXT_DATA__' || content.includes('__NEXT_DATA__') || content.includes('self.__next_f.push') || content.includes('__APOLLO_STATE__')) {
             try {
                 // If it's pure __NEXT_DATA__
-                if (content.includes('__NEXT_DATA__')) {
+                if (scriptId === '__NEXT_DATA__' || content.includes('__NEXT_DATA__')) {
                     const parsed = JSON.parse(content);
                     const items = parsed.props?.pageProps?.items || [];
                     if (Array.isArray(items)) {
@@ -77,6 +78,20 @@ export function parseListings(html: string): ParseResult {
                         }
                     }
                 }
+                // If it's the Apollo GraphQL state
+                else if (content.includes('__APOLLO_STATE__')) {
+                    const apolloMatch = content.match(/window\.__APOLLO_STATE__\s*=\s*(\{.*?\});\s*$/m) || 
+                                     content.match(/__APOLLO_STATE__\s*=\s*(\{.*?\})/);
+                    if (apolloMatch) {
+                        const data = JSON.parse(apolloMatch[1]);
+                        // Apollo state is a normalized cache. We need to find "Store" or "Merchant" objects.
+                        Object.entries(data).forEach(([key, val]: [string, any]) => {
+                            if (key.startsWith('Store:') || key.startsWith('Merchant:') || (val && val.__typename === 'Store')) {
+                                addMerchantFromData(val);
+                            }
+                        });
+                    }
+                }
             } catch (e) {
                 // Silently skip malformed JSON fragments
             }
@@ -98,32 +113,36 @@ export function parseListings(html: string): ParseResult {
 
     function addMerchantFromData(item: any) {
         const name = item.store_name || item.merchant_name || item.name;
-        const store_id = item.store_id || item.business_id || item.id;
+        const store_id = item.store_id || item.business_id || item.id || item.id_str;
         if (!name || !store_id) return;
         
         // Deduplicate
         if (merchants.some(m => m.store_id === String(store_id))) return;
 
+        // Modern markers for sponsored
+        const is_sponsored = !!(item.is_sponsored || item.isSponsored || item.ad_id || item.isAd || item.is_promoted);
+
+        // Improved discount extraction from JSON
+        const offers = item.offers || item.promotions || [];
+        const has_discount = !!(item.has_discount || (Array.isArray(offers) && offers.length > 0));
+        const firstOffer = Array.isArray(offers) && offers.length > 0 ? (offers[0].title || offers[0].text) : null;
+
         merchants.push({
             merchant_name: String(name).trim(),
             rank: rank++,
-            is_sponsored: !!(item.is_sponsored || item.isSponsored),
-            has_discount: !!(item.has_discount || (item.offers && item.offers.length > 0)),
-            offer_title: item.offer_title || (item.offers && item.offers[0]?.title) || item.delivery_fee_str || null,
+            is_sponsored,
+            has_discount,
+            offer_title: item.offer_title || firstOffer || item.delivery_fee_str || null,
             raw_snippet: JSON.stringify(item).substring(0, 200),
             store_id: String(store_id),
-            discount_type: item.discount_type || null,
-            delivery_fee: String(item.delivery_fee || item.delivery_fee_amount || ""),
-            rating: item.star_rating || item.rating || null,
-            review_count: item.num_star_rating || item.review_count || null
+            discount_type: item.discount_type || (has_discount ? "PROMOTION" : null),
+            delivery_fee: String(item.delivery_fee || item.delivery_fee_amount || item.deliveryFee || ""),
+            rating: item.star_rating || item.rating || item.average_rating || null,
+            review_count: item.num_star_rating || item.review_count || item.ratings_count || null
         });
     }
 
-    if (merchants.length > 0) {
-        return { status: "SUCCESS", merchants };
-    }
-
-    // 4. Fallback to DOM parsing
+    // 4. Fallback/Supplement with DOM parsing
     // More robust store card selection - catch them in carousels and lists
     $('[data-anchor-id="StoreCard"], [data-testid="StoreCard"], a[href*="/store/"]').each((i, el) => {
         const $el = $(el);
@@ -133,18 +152,20 @@ export function parseListings(html: string): ParseResult {
         if (!href.includes('/store/')) return;
         if (href.includes('search_type=')) return;
 
-        let store_id = null;
-        const matchStore = href.match(/\/store\/(\d+)/);
+        let store_id: string | null = null;
+        const matchStore = href.match(/\/store\/([^\/?#]+)/);
         if (matchStore) {
             store_id = matchStore[1];
         } else {
             // Check for store_id in parent attributes or name
             const parentHref = $el.closest('a').attr('href');
             if (parentHref) {
-                const pMatch = parentHref.match(/\/store\/(\d+)/);
+                const pMatch = parentHref.match(/\/store\/([^\/?#]+)/);
                 if (pMatch) store_id = pMatch[1];
             }
         }
+
+        if (!store_id) return;
 
         const name = $el.find('[data-telemetry-id="store.name"]').text() || 
                      $el.find('h2, h3, span').first().text();
@@ -158,7 +179,8 @@ export function parseListings(html: string): ParseResult {
                              text.includes('Ad') || 
                              text.includes('Promoted') || 
                              $el.find('[aria-label*="Sponsored"]').length > 0 ||
-                             $el.find('[aria-label*="Promoted"]').length > 0;
+                             $el.find('[aria-label*="Promoted"]').length > 0 ||
+                             $el.find('[data-testid="sponsored-badge"]').length > 0;
         
         // Collect offer text from multiple sources
         const specificOfferText = $el.find('[data-testid*="offer"]').text() || 
@@ -169,10 +191,9 @@ export function parseListings(html: string): ParseResult {
         const fullCardText = $el.text();
         const offerText = specificOfferText || fullCardText;
         
-        const lowerOffer = offerText.toLowerCase();
+        const lowerOffer = (offerText || "").toLowerCase();
         
         // A listing has a genuine discount if it explicitly mentions a promotion beyond the standard new-user offer.
-        // The "$0 delivery fee, first order" string is a platform-wide new-user promo — NOT a restaurant discount.
         const standardNewUserPromo = lowerOffer.includes('$0 delivery fee') && lowerOffer.includes('first order');
         const has_discount = !standardNewUserPromo && (
             lowerOffer.includes(' off') || 
@@ -186,18 +207,25 @@ export function parseListings(html: string): ParseResult {
         );
 
         let delivery_fee = null;
-        const feeMatch = offerText.match(/\$?([0-9.]+)\s*delivery fee/i);
+        const feeMatch = lowerOffer.match(/\$?([0-9.]+)\s*delivery fee/i);
         if (feeMatch) {
             delivery_fee = feeMatch[1];
         } else if (lowerOffer.includes("0 delivery fee") || lowerOffer.includes("free delivery")) {
             delivery_fee = "0";
         }
 
-        if (name) {
-            // Deduplicate merchants by store_id if possible
-            const existing = merchants.find(m => m.store_id === store_id && m.merchant_name === name.trim());
-            if (existing) return;
-
+        // Deduplicate and MERGE with script results
+        const existingIdx = merchants.findIndex(m => m.store_id === store_id);
+        if (existingIdx !== -1) {
+            const existing = merchants[existingIdx];
+            // If DOM has sponsored/discount and script didn't, upgrade the record
+            if (is_sponsored && !existing.is_sponsored) existing.is_sponsored = true;
+            if (has_discount && !existing.has_discount) {
+                existing.has_discount = true;
+                existing.offer_title = offerText.trim();
+            }
+            if (!existing.delivery_fee && delivery_fee) existing.delivery_fee = delivery_fee;
+        } else {
             merchants.push({
                 merchant_name: name.trim(),
                 rank: rank++,
@@ -205,8 +233,8 @@ export function parseListings(html: string): ParseResult {
                 has_discount,
                 offer_title: offerText ? offerText.trim() : null,
                 raw_snippet: text.substring(0, 200).replace(/\s+/g, ' '),
-                store_id,
-                discount_type: has_discount ? offerText.trim() : null,
+                store_id: String(store_id),
+                discount_type: has_discount ? "PROMOTION" : null,
                 delivery_fee,
                 rating: null, // Basic extraction for now
                 review_count: null
