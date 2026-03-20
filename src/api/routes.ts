@@ -435,35 +435,43 @@ export function setupRoutes(app: Hono<{ Bindings: ApiEnv }>) {
             }
         }
 
-        // Insert observations
-        if (body.observations && body.observations.length > 0) {
+        // Insert observations in batches of 50 to satisfy D1 limits
+        const observations = body.observations || [];
+        if (observations.length > 0) {
             const insertStmt = c.env.DB.prepare(`
                 INSERT INTO observations (obs_id, run_id, market_id, observed_at, category, surface, merchant_name, brand_normalized, rank, is_sponsored, has_discount, offer_title, raw_snippet, store_id, discount_type, delivery_fee, rating, review_count, city)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `);
 
-            const batch = [];
-            for (const obs of body.observations) {
-                const norm = normalizeBrand(obs.merchant_name);
-                if (!isKnownBrand(obs.merchant_name) && norm === obs.merchant_name) {
-                    await recordUnknownBrand(c.env.DB, obs.merchant_name);
+            // Use a for loop to chunk the observations into batches of 50
+            const CHUNK_SIZE = 50;
+            for (let i = 0; i < observations.length; i += CHUNK_SIZE) {
+                const chunk = observations.slice(i, i + CHUNK_SIZE);
+                const batch = [];
+                for (const obs of chunk) {
+                    const norm = normalizeBrand(obs.merchant_name || "");
+                    if (obs.merchant_name && !isKnownBrand(obs.merchant_name) && norm === obs.merchant_name) {
+                        await recordUnknownBrand(c.env.DB, obs.merchant_name);
+                    }
+                    // Use a unique enough ID
+                    const obsId = `${obs.run_id}-${obs.market_id}-${obs.category}-${obs.rank}-${i + chunk.indexOf(obs)}-${Date.now()}`;
+                    batch.push(
+                        insertStmt.bind(
+                            obsId, obs.run_id, obs.market_id, obs.observed_at, obs.category, obs.surface,
+                            obs.merchant_name, norm, obs.rank, obs.is_sponsored ? 1 : 0, obs.has_discount ? 1 : 0,
+                            obs.offer_title || null, obs.raw_snippet || null,
+                            obs.store_id || null, obs.discount_type || null, obs.delivery_fee || null,
+                            obs.rating || null, obs.review_count || null, obs.city || null
+                        )
+                    );
                 }
-                const obsId = `${obs.run_id}-${obs.market_id}-${obs.category}-${obs.rank}-${Date.now()}`;
-                batch.push(
-                    insertStmt.bind(
-                        obsId, obs.run_id, obs.market_id, obs.observed_at, obs.category, obs.surface,
-                        obs.merchant_name, norm, obs.rank, obs.is_sponsored ? 1 : 0, obs.has_discount ? 1 : 0,
-                        obs.offer_title || null, obs.raw_snippet || null,
-                        obs.store_id || null, obs.discount_type || null, obs.delivery_fee || null,
-                        obs.rating || null, obs.review_count || null, obs.city || null
-                    )
-                );
-            }
-            if (batch.length > 0) {
-                await c.env.DB.batch(batch);
+                if (batch.length > 0) {
+                    await c.env.DB.batch(batch);
+                }
             }
 
-            // Auto-recompute aggregates for this date in the background
+            // Only auto-recompute if explicitly requested or if it's the final part of a run
+            // (In practice, we recompute for every ingest to keep dashboard fresh, but we can optimize later)
             const dateToRecompute = body.run?.started_at
                 ? body.run.started_at.slice(0, 10)
                 : new Date().toISOString().slice(0, 10);

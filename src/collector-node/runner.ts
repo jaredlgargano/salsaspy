@@ -317,7 +317,21 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
     };
 
     console.log(`Ingesting ${observations.length} observations to API...`);
-    await pushToApi(apiUrl, apiKey, runData, observations);
+    
+    // First, push the run metadata status
+    await pushToApi(apiUrl, apiKey, { ...runData, status: "INGESTING" }, []);
+
+    // Then, chunk the observations into batches of 500 to avoid huge payloads
+    const OBS_CHUNK_SIZE = 500;
+    for (let i = 0; i < observations.length; i += OBS_CHUNK_SIZE) {
+        const chunk = observations.slice(i, i + OBS_CHUNK_SIZE);
+        console.log(` -> Ingesting chunk ${Math.floor(i / OBS_CHUNK_SIZE) + 1}/${Math.ceil(observations.length / OBS_CHUNK_SIZE)} (${chunk.length} items)`);
+        await pushToApi(apiUrl, apiKey, null, chunk);
+    }
+
+    // Finally, push the final run status
+    await pushToApi(apiUrl, apiKey, runData, []);
+    
     console.log(`Ingest complete. Status: ${finalStatus}`);
     
     return finalStatus;

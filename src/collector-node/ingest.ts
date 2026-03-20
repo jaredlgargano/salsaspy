@@ -6,7 +6,7 @@ export async function pushToApi(apiUrl: string, apiKey: string, runData: any, ob
             "Authorization": `Bearer ${apiKey}`
         },
         body: JSON.stringify({
-            run: runData,
+            run: runData || undefined,
             observations: observations
         })
     });
