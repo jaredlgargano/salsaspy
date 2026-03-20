@@ -44,13 +44,8 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
         return "SUCCESS";
     }
 
-    const FORCE_SCRAPE = process.env.FORCE_SCRAPE === "1";
-    const prioritizedMarkets = markets.filter((m: any) => {
-        if (FORCE_SCRAPE) return true;
-        const tz = STATE_TZ[m.state] || 'America/New_York';
-        const localHour = parseInt(new Intl.DateTimeFormat('en-US', { hour: 'numeric', hour12: false, timeZone: tz }).format(now));
-        return localHour === 12 || localHour === 13;
-    });
+    // Process all markets returned by the API (timezone sharding handled at API level)
+    const prioritizedMarkets = markets;
 
     console.log(`Processing ${prioritizedMarkets.length} markets.`);
     
