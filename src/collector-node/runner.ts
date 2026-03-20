@@ -134,9 +134,9 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                             const isBan = res.statusCode === 401 || res.body.includes('login') || res.body.includes('verification');
                             if (cookies && isBan) {
                                 markBanned(cookies);
-                                console.log(` -> Account flagged (Status ${res.statusCode}), marked as banned. Retrying unauthenticated...`);
+                                console.log(` -> Account flagged (Status ${res.statusCode}), marked as banned. Rotating...`);
                             } else if (res.statusCode === 403) {
-                                console.log(` -> HTTP 403 (Forbidden) received. This might be a proxy/IP block. Not marking account as banned yet.`);
+                                console.log(` -> HTTP 403 received. This might be a proxy or account-specific throttle. Rotating for attempt ${attempts}...`);
                             }
                             throw new Error(`HTTP ${res.statusCode}`);
                         }
