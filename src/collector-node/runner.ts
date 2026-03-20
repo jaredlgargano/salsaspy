@@ -47,6 +47,7 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
     const { markets } = await marketRes.json() as { markets: any[] };
     const allMarkets = markets || [];
 
+    const FORCE_SCRAPE = process.env.FORCE_SCRAPE === "1";
     const myMarkets = allMarkets.filter((m: any) => {
         // Sharding is now handled by the API query
         
@@ -54,10 +55,16 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
         const tz = STATE_TZ[m.state] || 'America/New_York';
         const localHour = parseInt(new Intl.DateTimeFormat('en-US', { hour: 'numeric', hour12: false, timeZone: tz }).format(now));
 
+        if (FORCE_SCRAPE) return true;
         return localHour === 12 || localHour === 13;
     });
 
-    console.log(`Found ${myMarkets.length} markets for shard ${manualShard} at local 12:00 PM`);
+    if (myMarkets.length === 0 && allMarkets.length > 0) {
+        console.log(`⚠️  No markets active in shard ${manualShard} at local ${new Intl.DateTimeFormat('en-US', { hour: 'numeric', hour12: false }).format(now)} (Window is 12-1 PM).`);
+        if (!FORCE_SCRAPE) console.log(`   (Use FORCE_SCRAPE=1 to bypass this check)`);
+    } else {
+        console.log(`Found ${myMarkets.length} markets for shard ${manualShard} (Force: ${FORCE_SCRAPE})`);
+    }
     // Removed early return; we always want to report a run status to the API
 
     // No proxy APIs required, Cloudflare is natively bypassed
