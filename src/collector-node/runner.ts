@@ -3,7 +3,11 @@ import { parseListings } from "./parseListings";
 import { getShard } from "../shared/hash";
 import { getNextCookies, markBanned, getAccountCount } from "./cookieRotator";
 import { HttpsProxyAgent } from "https-proxy-agent";
+import { chromium } from "playwright-extra";
+import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import { getRandomProxy } from "./freeProxy";
+
+chromium.use(StealthPlugin());
 
 const STATE_TZ: Record<string, string> = {
     'AL': 'America/Chicago', 'AK': 'America/Anchorage', 'AZ': 'America/Phoenix', 'AR': 'America/Chicago',
@@ -22,158 +26,174 @@ const STATE_TZ: Record<string, string> = {
 };
 
 export async function runShard(apiUrl: string, apiKey: string, now: Date, runId: string, manualShard: number): Promise<string> {
-    console.log(`Fetching active markets from ${apiUrl}`);
-
-    // Dynamic import for pure ESM got-scraping package
-    const { gotScraping } = await import('got-scraping');
+    console.log(`Starting runShard for shard ${manualShard}`);
 
     const SHARDS_TOTAL = parseInt(process.env.SHARDS_TOTAL || "100");
-    const proxyUrl = process.env.PROXY_URL;
-    const baseAgent = proxyUrl ? new HttpsProxyAgent(proxyUrl) : undefined;
-
-    // 1. Fetch Markets
-    // Use unscraped_only=1 to ensure we don't double-scrape markets during the broadened window
     const marketRes = await fetch(`${apiUrl}/v1/markets?shard=${manualShard}&shards_total=${SHARDS_TOTAL}&active=1&unscraped_only=1`, {
         headers: { 'Authorization': `Bearer ${apiKey}` }
     });
     
     if (!marketRes.ok) {
-        console.error(`Failed to fetch markets: ${marketRes.status} ${marketRes.statusText}`);
-        const text = await marketRes.text();
-        console.error(`Response body: ${text}`);
+        console.error(`Failed to fetch markets: ${marketRes.status}`);
         return "FAILED";
     }
 
     const { markets } = await marketRes.json() as { markets: any[] };
-    const allMarkets = markets || [];
+    if (!markets || markets.length === 0) {
+        console.log("No markets found for this shard.");
+        return "SUCCESS";
+    }
 
     const FORCE_SCRAPE = process.env.FORCE_SCRAPE === "1";
-    const myMarkets = allMarkets.filter((m: any) => {
-        // Sharding is now handled by the API query
-        
-        // Timezone check for 12:00 PM or 1:00 PM (to account for GitHub Action delays)
+    const prioritizedMarkets = markets.filter((m: any) => {
+        if (FORCE_SCRAPE) return true;
         const tz = STATE_TZ[m.state] || 'America/New_York';
         const localHour = parseInt(new Intl.DateTimeFormat('en-US', { hour: 'numeric', hour12: false, timeZone: tz }).format(now));
-
-        if (FORCE_SCRAPE) return true;
         return localHour === 12 || localHour === 13;
     });
 
-    if (myMarkets.length === 0 && allMarkets.length > 0) {
-        console.log(`⚠️  No markets active in shard ${manualShard} at local ${new Intl.DateTimeFormat('en-US', { hour: 'numeric', hour12: false }).format(now)} (Window is 12-1 PM).`);
-        if (!FORCE_SCRAPE) console.log(`   (Use FORCE_SCRAPE=1 to bypass this check)`);
-    } else {
-        console.log(`Found ${myMarkets.length} markets for shard ${manualShard} (Force: ${FORCE_SCRAPE})`);
-    }
-    // Removed early return; we always want to report a run status to the API
-
-    // No proxy APIs required, Cloudflare is natively bypassed
-
-    // Prioritize top markets (highest ad density) so they get processed first
-    const TOP_MARKETS = new Set([
-        'New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix', 'Philadelphia',
-        'San Antonio', 'San Diego', 'Dallas', 'San Jose', 'Austin', 'Jacksonville',
-        'Fort Worth', 'Columbus', 'Charlotte', 'Indianapolis', 'San Francisco',
-        'Seattle', 'Denver', 'Nashville', 'Oklahoma City', 'Las Vegas', 'Portland',
-        'Memphis', 'Louisville', 'Baltimore', 'Milwaukee', 'Albuquerque', 'Tucson',
-        'Fresno', 'Sacramento', 'Kansas City', 'Mesa', 'Atlanta', 'Omaha',
-        'Colorado Springs', 'Raleigh', 'Long Beach', 'Virginia Beach', 'Minneapolis'
-    ]);
-
-    const prioritizedMarkets = [
-        ...myMarkets.filter((m: any) => TOP_MARKETS.has(m.city)),
-        ...myMarkets.filter((m: any) => !TOP_MARKETS.has(m.city))
-    ];
-    const topCount = prioritizedMarkets.filter((m: any) => TOP_MARKETS.has(m.city)).length;
-    if (topCount > 0) console.log(` -> ${topCount} top-priority metros will be processed first.`);
+    console.log(`Processing ${prioritizedMarkets.length} markets.`);
+    
+    // Launch ONE browser for the entire shard
+    const browser = await chromium.launch({ 
+        headless: true, 
+        args: ['--no-sandbox', '--disable-setuid-sandbox'] 
+    });
 
     let successCount = 0;
     let failCount = 0;
     let lastFailureReason: string = "";
     const observations: any[] = [];
-
     const categories = ["", "Healthy", "Mexican", "Salad", "Chicken"];
 
-    // Build the request queue
-    const requestQueue: (() => Promise<void>)[] = [];
+    try {
+        for (const market of prioritizedMarkets) {
+            console.log(`Market: ${market.city}, ${market.state}`);
 
-    for (const market of prioritizedMarkets) {
+            for (const category of categories) {
+                const categoryName = category === "" ? "Base Search" : category;
+                const pathExt = category === "" ? "Restaurants/" : `${encodeURIComponent(category)}/`;
+                const url = `https://www.doordash.com/search/store/${pathExt}?lat=${market.latitude}&lng=${market.longitude}`;
 
-        // Search Categories
-        for (const category of categories) {
-            const categoryName = category === "" ? "Base Search" : category;
-            const pathExt = category === "" ? "Restaurants/" : `${encodeURIComponent(category)}/`;
-            const url = `https://www.doordash.com/search/store/${pathExt}?lat=${market.latitude}&lng=${market.longitude}`;
-
-            requestQueue.push(async () => {
                 let attempts = 0;
                 let success = false;
-                while (attempts < 10 && !success) {
+
+                while (attempts < 5 && !success) {
                     attempts++;
+                    const context = await browser.newContext({
+                        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                        viewport: { width: 1280, height: 800 }
+                    });
+
                     try {
                         const cookies = getNextCookies();
-                        const headers: Record<string, string> = {};
-                        if (cookies) headers['Cookie'] = cookies;
-
-                        let currentAgent = baseAgent;
-                        if (!currentAgent && !proxyUrl) {
-                            const fp = getRandomProxy();
-                            if (fp) currentAgent = new HttpsProxyAgent(fp);
+                        if (cookies) {
+                            const cookieObjects = cookies.split('; ').map((pair: string) => {
+                                const eqIdx = pair.indexOf('=');
+                                return {
+                                    name: pair.substring(0, eqIdx),
+                                    value: pair.substring(eqIdx + 1),
+                                    domain: '.doordash.com',
+                                    path: '/',
+                                };
+                            });
+                            await context.addCookies(cookieObjects);
                         }
 
-                        const res = await gotScraping({
-                            url: url,
-                            headerGeneratorOptions: { browsers: ['chrome'], os: ['macos'] },
-                            headers: {
-                                ...headers,
-                                'Referer': 'https://www.doordash.com/',
-                                'Origin': 'https://www.doordash.com',
-                                'Accept-Language': 'en-US,en;q=0.9',
-                            },
-                            agent: currentAgent ? { https: currentAgent, http: currentAgent } : undefined,
-                            timeout: { request: 20000 }
-                        });
+                        const page = await context.newPage();
+                        // Jitter
+                        await new Promise(r => setTimeout(r, 1000 + Math.random() * 2000));
 
-                        // If account was flagged, mark it banned and retry unauthenticated
-                        if (res.statusCode === 401 || res.statusCode === 403) {
-                            const isBan = res.statusCode === 401 || res.body.includes('login') || res.body.includes('verification');
-                            if (cookies && isBan) {
-                                markBanned(cookies);
-                                console.log(` -> Account flagged (Status ${res.statusCode}), marked as banned. Rotating...`);
-                            } else if (res.statusCode === 403) {
-                                console.log(` -> HTTP 403 received. This might be a proxy or account-specific throttle. Rotating for attempt ${attempts}...`);
+                        const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+                        const status = response?.status() || 0;
+
+                        if (status === 200) {
+                            const html = await page.content();
+                            const result = parseListings(html);
+                            if (result.status === "SUCCESS") {
+                                successCount++;
+                                success = true;
+                                result.merchants.forEach((m: any) => {
+                                    observations.push({
+                                        run_id: runId,
+                                        market_id: market.market_id,
+                                        city: market.city,
+                                        observed_at: now.toISOString(),
+                                        category: categoryName,
+                                        surface: "searchCategory",
+                                        merchant_name: m.merchant_name,
+                                        store_id: m.store_id,
+                                        rank: m.rank,
+                                        is_sponsored: m.is_sponsored,
+                                        has_discount: m.has_discount,
+                                        discount_type: m.discount_type,
+                                        delivery_fee: m.delivery_fee,
+                                        rating: m.rating,
+                                        review_count: m.review_count,
+                                        offer_title: m.offer_title,
+                                        raw_snippet: m.raw_snippet
+                                    });
+                                });
+                                console.log(` -> ${categoryName}: Found ${result.merchants.length}`);
+                            } else {
+                                throw new Error(`Parse failed: ${result.status}`);
                             }
-                            throw new Error(`HTTP ${res.statusCode}`);
+                        } else {
+                            if (status === 401 || status === 403) {
+                                if (cookies && status === 401) markBanned(cookies);
+                                console.log(` -> HTTP ${status}. Rotating identity...`);
+                            }
+                            throw new Error(`HTTP ${status}`);
                         }
+                    } catch (e: any) {
+                        if (attempts === 5) {
+                            failCount++;
+                            lastFailureReason = e.message;
+                            console.log(` -> Failed ${categoryName} after ${attempts} attempts: ${e.message}`);
+                        } else {
+                            await new Promise(r => setTimeout(r, 2000));
+                        }
+                    } finally {
+                        await context.close();
+                    }
+                }
+            }
 
-                        if (res.statusCode !== 200) throw new Error(`HTTP ${res.statusCode}`);
-                        const html = res.body;
-                        const result = parseListings(html);
+            // Best of Lunch
+            const lunchUrl = `https://www.doordash.com/search/store/best%20of%20lunch/?lat=${market.latitude}&lng=${market.longitude}`;
+            let lAttempts = 0;
+            let lSuccess = false;
 
-                        if (result.status === "SUCCESS") {
-                            // Extract Data
-                            if (result.merchants.length < 20) {
-                                console.log(` -> Anomaly: category ${categoryName} had < 20 results`);
-                            }
-
-                            const sponsoredCount = result.merchants.filter(m => m.is_sponsored).length;
-                            if (sponsoredCount === 0) {
-                                console.log(` -> Anomaly: category ${categoryName} had ZERO sponsored listings`);
-                            }
-
+            while (lAttempts < 5 && !lSuccess) {
+                lAttempts++;
+                const lContext = await browser.newContext({ userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36' });
+                try {
+                    const lCookies = getNextCookies();
+                    if (lCookies) {
+                        const cObjs = lCookies.split('; ').map((p: string) => ({
+                            name: p.substring(0, p.indexOf('=')),
+                            value: p.substring(p.indexOf('=') + 1),
+                            domain: '.doordash.com',
+                            path: '/',
+                        }));
+                        await lContext.addCookies(cObjs);
+                    }
+                    const lPage = await lContext.newPage();
+                    const lRes = await lPage.goto(lunchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+                    if (lRes?.status() === 200) {
+                        const lHtml = await lPage.content();
+                        const lResult = parseListings(lHtml);
+                        if (lResult.status === "SUCCESS") {
+                            lSuccess = true;
                             successCount++;
-                            success = true; // Break the retry loop
-                            result.merchants.forEach((m, i) => {
-                                if (i < 5) {
-                                    console.log(`Sample Merchant: ${m.merchant_name} | Sponsored: ${m.is_sponsored} | Has Discount: ${m.has_discount} | Offer: ${m.offer_title}`);
-                                }
+                            lResult.merchants.forEach((m: any) => {
                                 observations.push({
                                     run_id: runId,
                                     market_id: market.market_id,
                                     city: market.city,
                                     observed_at: now.toISOString(),
-                                    category: categoryName,
-                                    surface: "searchCategory",
+                                    category: "None",
+                                    surface: "bestOfLunch",
                                     merchant_name: m.merchant_name,
                                     store_id: m.store_id,
                                     rank: m.rank,
@@ -187,137 +207,24 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                                     raw_snippet: m.raw_snippet
                                 });
                             });
-                            console.log(` -> Found ${result.merchants.length} merchants in ${market.city} (${categoryName}).`);
-                        } else {
-                            if (attempts === 10) {
-                                failCount++;
-                                lastFailureReason = result.status;
-                                console.log(` -> Failed parse ${category} in ${market.city} after 10 attempts: ${result.status}`);
-                            } else {
-                                console.log(` -> Failed parse ${category} in ${market.city}: ${result.status} (Attempt ${attempts}/10). Retrying...`);
-                                // Increased jitter between retries
-                                await new Promise(r => setTimeout(r, 2000 + Math.random() * 2000));
-                            }
+                            console.log(` -> Best of Lunch: Found ${lResult.merchants.length}`);
                         }
-                    } catch (e: any) {
-                        if (attempts === 10) {
-                            failCount++;
-                            lastFailureReason = e.message;
-                            console.log(` -> Navigation error in ${market.city} (${categoryName}) after 10 attempts: ${e.message}`);
-                        } else {
-                            let sleepTime = 1000;
-                            if (e.message.includes('429')) {
-                                sleepTime = 2500 * attempts;
-                                console.log(` -> Rate limited (429) in ${market.city} (${categoryName}). Sleeping for ${sleepTime}ms...`);
-                            } else {
-                                console.log(` -> Timeout/Error in ${market.city} (${categoryName}): ${e.message.substring(0, 100)} (Attempt ${attempts}/10).`);
-                            }
-                            await new Promise(r => setTimeout(r, sleepTime)); // Sleep before retry
-                        }
-                    }
-                }
-            });
-        }
-
-        // Best of Lunch - Use the search-based path which is more reliable than /home/
-        const lunchUrl = `https://www.doordash.com/search/store/best%20of%20lunch/?lat=${market.latitude}&lng=${market.longitude}`;
-
-        requestQueue.push(async () => {
-            let attempts = 0;
-            let success = false;
-            while (attempts < 10 && !success) {
-                attempts++;
-                try {
-                    let currentAgent = baseAgent;
-                    if (!currentAgent && !proxyUrl) {
-                        const fp = getRandomProxy();
-                        if (fp) currentAgent = new HttpsProxyAgent(fp);
-                    }
-
-                    const res = await gotScraping({
-                        url: lunchUrl,
-                        headerGeneratorOptions: { browsers: ['chrome'], os: ['macos'] },
-                        agent: currentAgent ? { https: currentAgent, http: currentAgent } : undefined,
-                        timeout: { request: 15000 }
-                    });
-
-                    if (res.statusCode !== 200) throw new Error(`HTTP ${res.statusCode}`);
-                    const html = res.body;
-                    const result = parseListings(html);
-
-                    if (result.status === "SUCCESS") {
-                        if (result.merchants.length < 20) failCount++;
-                        if (result.merchants.filter(m => m.is_sponsored).length === 0) failCount++;
-
-                        successCount++;
-                        success = true; // Break out of retry loop
-                        result.merchants.forEach(m => {
-                            observations.push({
-                                run_id: runId,
-                                market_id: market.market_id,
-                                city: market.city,
-                                observed_at: now.toISOString(),
-                                category: "None",
-                                surface: "bestOfLunch",
-                                merchant_name: m.merchant_name,
-                                store_id: m.store_id,
-                                rank: m.rank,
-                                is_sponsored: m.is_sponsored,
-                                has_discount: m.has_discount,
-                                discount_type: m.discount_type,
-                                delivery_fee: m.delivery_fee,
-                                rating: m.rating,
-                                review_count: m.review_count,
-                                offer_title: m.offer_title,
-                                raw_snippet: m.raw_snippet
-                            });
-                        });
-                        console.log(` -> Found ${result.merchants.length} merchants in ${market.city} (Best of Lunch).`);
                     } else {
-                        if (attempts === 10) {
-                            failCount++;
-                            lastFailureReason = result.status;
-                            console.log(` -> Failed parse Best of Lunch in ${market.city} after 10 attempts: ${result.status}`);
-                        } else {
-                            console.log(` -> Failed parse Best of Lunch in ${market.city}: ${result.status} (Attempt ${attempts}/10). Retrying...`);
-                            await new Promise(r => setTimeout(r, 1000));
-                        }
+                        throw new Error(`HTTP ${lRes?.status()}`);
                     }
                 } catch (e: any) {
-                    if (attempts === 10) {
-                        failCount++;
-                        lastFailureReason = e.message;
-                        console.log(` -> Navigation error in ${market.city} (Best of Lunch) after 10 attempts: ${e.message}`);
-                    } else {
-                        let sleepTime = 1000;
-                        if (e.message.includes('429')) {
-                            sleepTime = 2500 * attempts;
-                            console.log(` -> Rate limited (429) in ${market.city} (Best of Lunch). Sleeping for ${sleepTime}ms...`);
-                        } else {
-                            console.log(` -> Timeout/Error in ${market.city} (Best of Lunch): ${e.message.substring(0, 100)} (Attempt ${attempts}/10).`);
-                        }
-                        await new Promise(r => setTimeout(r, sleepTime));
-                    }
+                    if (lAttempts === 5) console.log(` -> Failed Best of Lunch: ${e.message}`);
+                    else await new Promise(r => setTimeout(r, 2000));
+                } finally {
+                    await lContext.close();
                 }
             }
-        });
-    }
-
-    console.log(`Executing ${requestQueue.length} scraper requests in parallel batches (size 2)...`);
-    const BATCH_SIZE = 2;
-    for (let i = 0; i < requestQueue.length; i += BATCH_SIZE) {
-        const batch = requestQueue.slice(i, i + BATCH_SIZE);
-        console.log(` -> Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(requestQueue.length / BATCH_SIZE)} (${batch.length} requests)`);
-        await Promise.all(batch.map(fn => fn()));
-
-        // Brief pause between batches to be respectful
-        if (i + BATCH_SIZE < requestQueue.length) {
-            await new Promise(resolve => setTimeout(resolve, 3000));
         }
+    } finally {
+        await browser.close();
     }
 
     const finalStatus = failCount === 0 ? "SUCCESS" : (successCount > 0 ? "PARTIAL" : "FAILED");
-
     const runData = {
         run_id: runId,
         started_at: now.toISOString(),
@@ -329,23 +236,15 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
         metadata: { successCount, failCount }
     };
 
-    console.log(`Ingesting ${observations.length} observations to API...`);
-    
-    // First, push the run metadata status
+    console.log(`Ingesting ${observations.length} items...`);
     await pushToApi(apiUrl, apiKey, { ...runData, status: "INGESTING" }, []);
-
-    // Then, chunk the observations into batches of 500 to avoid huge payloads
-    const OBS_CHUNK_SIZE = 500;
-    for (let i = 0; i < observations.length; i += OBS_CHUNK_SIZE) {
-        const chunk = observations.slice(i, i + OBS_CHUNK_SIZE);
-        console.log(` -> Ingesting chunk ${Math.floor(i / OBS_CHUNK_SIZE) + 1}/${Math.ceil(observations.length / OBS_CHUNK_SIZE)} (${chunk.length} items)`);
-        await pushToApi(apiUrl, apiKey, null, chunk);
+    
+    // Chunking
+    const CHUNK = 500;
+    for (let i = 0; i < observations.length; i += CHUNK) {
+        await pushToApi(apiUrl, apiKey, null, observations.slice(i, i + CHUNK));
     }
 
-    // Finally, push the final run status
     await pushToApi(apiUrl, apiKey, runData, []);
-    
-    console.log(`Ingest complete. Status: ${finalStatus}`);
-    
     return finalStatus;
 }

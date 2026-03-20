@@ -1,70 +1,64 @@
 
 import { parseListings } from "../src/collector-node/parseListings";
 import { getNextCookies } from "../src/collector-node/cookieRotator";
-import { getRandomProxy, initializeProxies } from "../src/collector-node/freeProxy";
-import { HttpsProxyAgent } from "https-proxy-agent";
+import { chromium } from "playwright-extra";
+import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import fs from "fs";
 
+chromium.use(StealthPlugin());
+
 /**
- * Diagnostic script to probe 403 errors.
- * Usage: npx ts-node scripts/test-403.ts
+ * Diagnostic script to probe 403 errors using Playwright.
  */
 async function testConnectivity() {
-    const { gotScraping } = await import('got-scraping');
-    
-    // 1. Initialize
-    await initializeProxies();
     const city = "Toledo";
     const category = "Chicken";
     const url = `https://www.doordash.com/search/store/${encodeURIComponent(category)}/?lat=41.6528&lng=-83.5379`;
 
-    console.log(`\n🕵️  Probing 403 for ${city} (${category})...`);
-    console.log(`URL: ${url}\n`);
+    console.log(`\n🕵️  Probing 403 for ${city} (${category}) via Playwright Stealth...`);
+    
+    const browser = await chromium.launch({ headless: true });
 
-    for (let i = 1; i <= 3; i++) {
+    for (let i = 1; i <= 2; i++) {
         console.log(`--- Attempt ${i} ---`);
+        const context = await browser.newContext();
         const cookies = getNextCookies();
-        const proxy = getRandomProxy();
-        const agent = proxy ? new HttpsProxyAgent(proxy) : undefined;
 
-        console.log(`Account: ${cookies ? cookies.substring(0, 50) + "..." : "NONE (Unauthenticated)"}`);
-        console.log(`Proxy: ${proxy || "NONE (Local IP)"}`);
+        if (cookies) {
+            const cookieObjects = cookies.split('; ').map((pair: string) => {
+                const eqIdx = pair.indexOf('=');
+                return {
+                    name: pair.substring(0, eqIdx),
+                    value: pair.substring(eqIdx + 1),
+                    domain: '.doordash.com',
+                    path: '/',
+                };
+            });
+            await context.addCookies(cookieObjects);
+        }
 
         try {
-            const res = await gotScraping({
-                url,
-                headers: cookies ? { 'Cookie': cookies } : {},
-                agent: agent ? { https: agent, http: agent } : undefined,
-                timeout: { request: 15000 },
-                throwHttpErrors: false
-            });
+            const page = await context.newPage();
+            const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+            const status = response?.status() || 0;
 
-            console.log(`Status: ${res.statusCode}`);
-            console.log(`Response Size: ${res.body.length} bytes`);
+            console.log(`Status: ${status}`);
             
-            if (res.statusCode === 403) {
-                console.log("❌ 403 Forbidden detected.");
-                console.log("Headers:", JSON.stringify(res.headers, null, 2));
-                const bodySnippet = res.body.substring(0, 500);
-                console.log("Body Snippet:", bodySnippet);
-                
-                if (bodySnippet.includes("Cloudflare")) {
-                    console.log("🚨 BLOCK TYPE: Cloudflare WAF / Challenge Page");
-                } else if (bodySnippet.includes("Access Denied")) {
-                    console.log("🚨 BLOCK TYPE: Direct Access Denied (Likely IP block)");
-                }
-            } else if (res.statusCode === 200) {
+            if (status === 200) {
                 console.log("✅ 200 OK! Connection successful.");
-                const result = parseListings(res.body);
+                const html = await page.content();
+                const result = parseListings(html);
                 console.log(`Parsed: ${result.status} | Found ${result.merchants.length} merchants.`);
             } else {
-                console.log(`⚠️  Received status ${res.statusCode}`);
+                console.log(`❌ Failed with status ${status}`);
             }
         } catch (e: any) {
             console.log(`💥 Request crashed: ${e.message}`);
         }
+        await context.close();
         console.log("");
     }
+    await browser.close();
 }
 
 testConnectivity().catch(console.error);
