@@ -3,7 +3,7 @@ import path from 'path';
 
 const ACCOUNTS_PATH = path.resolve(process.cwd(), 'accounts.json');
 const MAX_REQUESTS_PER_ACCOUNT_PER_DAY = 1000;
-const EXPIRY_WARNING_DAYS = 1;
+const EXPIRY_WARNING_DAYS = 0.5;
 
 /** Decode a JWT and return its expiry Date, or null if unparseable. */
 function getJwtExpiry(cookies: string): Date | null {

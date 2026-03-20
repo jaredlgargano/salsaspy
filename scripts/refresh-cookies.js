@@ -68,8 +68,8 @@ async function refreshAccount(account, index) {
 
         const page = browser.pages()[0] || await browser.newPage();
 
-        // Visit the homepage — this naturally refreshes the session token
-        await page.goto('https://www.doordash.com/', {
+        // Visit the orders page — this is more likely to trigger a full session extension than the homepage
+        await page.goto('https://www.doordash.com/orders', {
             waitUntil: 'domcontentloaded',
             timeout: 20000
         });
