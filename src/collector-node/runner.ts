@@ -73,6 +73,8 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                 let attempts = 0;
                 let success = false;
 
+                while (attempts < 5 && !success) {
+                    attempts++;
                     const proxy = process.env.PROXY_URL || getRandomProxy();
                     console.log(` -> Attempt ${attempts}/5 using Proxy: ${proxy || 'DIRECT'}`);
                     
@@ -170,8 +172,11 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                 lAttempts++;
                 const lProxy = process.env.PROXY_URL || getRandomProxy();
                 const lContext = await browser.newContext({ 
-                    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-                    proxy: lProxy ? { server: lProxy } : undefined
+                    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+                    proxy: lProxy ? { server: lProxy } : undefined,
+                    extraHTTPHeaders: {
+                        'Accept-Language': 'en-US,en;q=0.9',
+                    }
                 });
                 try {
                     const lCookies = getNextCookies();
