@@ -10,19 +10,29 @@ const API_KEY = process.env.API_KEY || "my-super-secret-key";
 async function start() {
     console.log("Starting Node.js Playwright Collector...");
 
+    // Helper to parse CLI flags
+    const getArg = (name: string) => {
+        const found = process.argv.find(a => a.startsWith(`--${name}=`));
+        return found ? found.split('=')[1] : undefined;
+    };
+
     if (!process.env.PROXY_URL) {
         await initializeProxies();
     }
 
-    // In a real cron environment, we'd determine shard dynamically.
-    // We can pass process.env.SHARD to run a specific shard partition.
-    const shard = process.env.SHARD ? parseInt(process.env.SHARD, 10) : -1;
-    const now = new Date();
+    // Support both env vars (local debug) and flags (GHA)
+    const shardStr = getArg('shard') || process.env.SHARD;
+    const shard = shardStr ? parseInt(shardStr, 10) : -1;
     
-    // Use GitHub Run ID if available, otherwise fallback to timestamp
-    const baseRunId = process.env.RUN_ID || `manual-${now.getTime()}`;
+    const now = new Date();
+    const baseRunId = getArg('runId') || process.env.RUN_ID || `manual-${now.getTime()}`;
     const runId = shard !== -1 ? `${baseRunId}-${shard}` : baseRunId;
 
+    if (shard === -1) {
+        console.warn("⚠️  Warning: No shard ID provided. Processing part of the total pool based on default hashing.");
+    }
+
+    console.log(`Shard: ${shard}`);
     console.log(`Run ID: ${runId}`);
     console.log(`Base Run ID for grouping: ${baseRunId}`);
 

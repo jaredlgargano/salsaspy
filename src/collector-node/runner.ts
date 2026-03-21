@@ -1,29 +1,12 @@
 import { pushToApi } from "./ingest";
 import { parseListings } from "./parseListings";
-import { getShard } from "../shared/hash";
-import { getNextCookies, markBanned, getAccountCount } from "./cookieRotator";
-import { HttpsProxyAgent } from "https-proxy-agent";
+import { getNextCookies, markBanned } from "./cookieRotator";
 import { chromium } from "playwright-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import { getRandomProxy } from "./freeProxy";
+import { Browser, BrowserContext } from "playwright";
 
 chromium.use(StealthPlugin());
-
-const STATE_TZ: Record<string, string> = {
-    'AL': 'America/Chicago', 'AK': 'America/Anchorage', 'AZ': 'America/Phoenix', 'AR': 'America/Chicago',
-    'CA': 'America/Los_Angeles', 'CO': 'America/Denver', 'CT': 'America/New_York', 'DE': 'America/New_York',
-    'FL': 'America/New_York', 'GA': 'America/New_York', 'HI': 'Pacific/Honolulu', 'ID': 'America/Boise',
-    'IL': 'America/Chicago', 'IN': 'America/Indiana/Indianapolis', 'IA': 'America/Chicago', 'KS': 'America/Chicago',
-    'KY': 'America/New_York', 'LA': 'America/Chicago', 'ME': 'America/New_York', 'MD': 'America/New_York',
-    'MA': 'America/New_York', 'MI': 'America/Detroit', 'MN': 'America/Chicago', 'MS': 'America/Chicago',
-    'MO': 'America/Chicago', 'MT': 'America/Denver', 'NE': 'America/Chicago', 'NV': 'America/Los_Angeles',
-    'NH': 'America/New_York', 'NJ': 'America/New_York', 'NM': 'America/Denver', 'NY': 'America/New_York',
-    'NC': 'America/New_York', 'ND': 'America/Chicago', 'OH': 'America/New_York', 'OK': 'America/Chicago',
-    'OR': 'America/Los_Angeles', 'PA': 'America/New_York', 'RI': 'America/New_York', 'SC': 'America/New_York',
-    'SD': 'America/Chicago', 'TN': 'America/Chicago', 'TX': 'America/Chicago', 'UT': 'America/Denver',
-    'VT': 'America/New_York', 'VA': 'America/New_York', 'WA': 'America/Los_Angeles', 'WV': 'America/New_York',
-    'WI': 'America/Chicago', 'WY': 'America/Denver', 'DC': 'America/New_York'
-};
 
 export async function runShard(apiUrl: string, apiKey: string, now: Date, runId: string, manualShard: number): Promise<string> {
     console.log(`Starting runShard for shard ${manualShard}`);
@@ -41,8 +24,6 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
 
     let { markets } = await marketRes.json() as { markets: any[] };
     if (!markets || markets.length === 0) {
-        console.log("No markets found for this shard. (Try manual run without unscraped_only if this is a repeat)");
-        // Fallback: fetch without unscraped_only if we explicitly asked for a forced run
         if (process.env.FORCE_SCRAPE === "1") {
              const mRes2 = await fetch(`${apiUrl}/v1/markets?shard=${manualShard}&shards_total=${SHARDS_TOTAL}&active=1`, {
                  headers: { 'Authorization': `Bearer ${apiKey}` }
@@ -55,7 +36,7 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
     }
 
     if (markets.length === 0) {
-        console.log("Ultimately no markets found.");
+        console.log("No markets found to process.");
         return "SUCCESS";
     }
 
@@ -63,43 +44,79 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
     
     const browser = await chromium.launch({ 
         headless: true, 
-        args: ['--no-sandbox', '--disable-setuid-sandbox'] 
+        args: [
+            '--no-sandbox', 
+            '--disable-setuid-sandbox', 
+            '--disable-blink-features=AutomationControlled',
+            '--disable-dev-shm-usage', // Critical for GHA
+            '--disable-web-security'
+        ] 
     });
 
     let successCount = 0;
     let failCount = 0;
     let lastFailureReason: string = "";
     const observations: any[] = [];
-    const categories = ["", "Healthy", "Mexican", "Salad", "Chicken"];
+    
+    const objectives = [
+        ...["", "Healthy", "Mexican", "Salad", "Chicken"].map(cat => ({ 
+            name: cat === "" ? "Base Search" : cat,
+            urlPath: cat === "" ? "Restaurants/" : `${encodeURIComponent(cat)}/`,
+            surface: "searchCategory" as const
+        })),
+        { name: "Best of Lunch", urlPath: "best%20of%20lunch/", surface: "bestOfLunch" as const }
+    ];
 
     try {
         for (const market of markets) {
-            console.log(`\n🌎 Market: ${market.city}, ${market.state} (${market.latitude}, ${market.longitude})`);
+            console.log(`\n🌎 Market: ${market.city}, ${market.state}`);
 
-            for (const category of categories) {
-                const categoryName = category === "" ? "Base Search" : category;
-                const pathExt = category === "" ? "Restaurants/" : `${encodeURIComponent(category)}/`;
-                const url = `https://www.doordash.com/search/store/${pathExt}?lat=${market.latitude}&lng=${market.longitude}`;
+            // We reuse contexts when possible to save memory
+            let activeDirectContext: BrowserContext | null = null;
+            let activeGuestContext: BrowserContext | null = null;
 
+            for (const obj of objectives) {
+                const url = `https://www.doordash.com/search/store/${obj.urlPath}?lat=${market.latitude}&lng=${market.longitude}`;
                 let success = false;
+                
+                // Tier definitions
                 const tiers = [
-                    { type: 'Proxy+Auth', useProxy: true, useCookies: true },
-                    { type: 'Direct+Auth', useProxy: false, useCookies: true },
-                    { type: 'Direct+Guest', useProxy: false, useCookies: false }
+                    { type: 'Proxy', useProxy: true, useCookies: true },
+                    { type: 'Direct', useProxy: false, useCookies: true },
+                    { type: 'Guest', useProxy: false, useCookies: false }
                 ];
 
                 for (const tier of tiers) {
                     if (success) break;
                     
+                    let context: BrowserContext;
                     const proxy = tier.useProxy ? (process.env.PROXY_URL || getRandomProxy()) : undefined;
-                    console.log(`  -> Tier: ${tier.type} | Proxy: ${proxy || 'NONE'}`);
 
-                    const context = await browser.newContext({
-                        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-                        viewport: { width: 1280, height: 800 },
-                        proxy: proxy ? { server: proxy } : undefined,
-                        extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' }
-                    });
+                    // Context Creation / Reuse
+                    if (tier.type === 'Proxy') {
+                        // Proxies need fresh contexts because IP is tied to context
+                        context = await browser.newContext({
+                            userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+                            proxy: proxy ? { server: proxy } : undefined,
+                            extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' }
+                        });
+                    } else if (tier.type === 'Direct') {
+                        if (!activeDirectContext) {
+                            activeDirectContext = await browser.newContext({
+                                userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+                                extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' }
+                            });
+                        }
+                        context = activeDirectContext;
+                    } else { // Guest
+                        if (!activeGuestContext) {
+                            activeGuestContext = await browser.newContext({
+                                userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+                                extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' }
+                            });
+                        }
+                        context = activeGuestContext;
+                    }
 
                     try {
                         let cookiesStr = "";
@@ -109,14 +126,15 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                                 const cObjs = cookiesStr.split('; ').map((p: string) => ({
                                     name: p.substring(0, p.indexOf('=')),
                                     value: p.substring(p.indexOf('=') + 1),
-                                    domain: '.doordash.com',
-                                    path: '/',
+                                    domain: '.doordash.com', path: '/',
                                 }));
                                 await context.addCookies(cObjs);
                             }
                         }
 
                         const page = await context.newPage();
+                        console.log(`  -> [${obj.name}] Tier: ${tier.type} | Proxy: ${proxy ? 'YES' : 'NONE'}`);
+
                         const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 25000 });
                         const status = response?.status() || 0;
 
@@ -129,43 +147,44 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                                 result.merchants.forEach((m: any) => {
                                     observations.push({
                                         run_id: runId, market_id: market.market_id, city: market.city,
-                                        observed_at: now.toISOString(), category: categoryName, surface: "searchCategory",
-                                        merchant_name: m.merchant_name, store_id: m.store_id, rank: m.rank,
-                                        is_sponsored: m.is_sponsored, has_discount: m.has_discount, discount_type: m.discount_type,
-                                        delivery_fee: m.delivery_fee, rating: m.rating, review_count: m.review_count,
-                                        offer_title: m.offer_title, raw_snippet: m.raw_snippet
+                                        observed_at: now.toISOString(), category: obj.surface === "bestOfLunch" ? "None" : obj.name, 
+                                        surface: obj.surface, merchant_name: m.merchant_name, store_id: m.store_id, 
+                                        rank: m.rank, is_sponsored: m.is_sponsored, has_discount: m.has_discount, 
+                                        discount_type: m.discount_type, delivery_fee: m.delivery_fee, rating: m.rating, 
+                                        review_count: m.review_count, offer_title: m.offer_title, raw_snippet: m.raw_snippet
                                     });
                                 });
-                                console.log(`     ✅ SUCCESS: ${result.merchants.length} merchants found.`);
+                                console.log(`     ✅ Found ${result.merchants.length}`);
                             } else {
-                                console.log(`     ⚠️ Parse Failed (${result.status})`);
+                                console.log(`     ⚠️ Parse: ${result.status}`);
                             }
                         } else {
-                            console.log(`     ❌ HTTP ${status} (${response?.statusText()})`);
+                            console.log(`     ❌ HTTP ${status}`);
                             if (status === 401 && cookiesStr) markBanned(cookiesStr);
-                            if (status === 403) {
-                                const snippet = (await page.content()).substring(0, 200).replace(/\n/g, ' ');
-                                console.log(`     🚩 403 Detail: ${snippet}`);
-                            }
                         }
+                        await page.close();
                     } catch (e: any) {
-                        console.log(`     💥 Error: ${e.message.substring(0, 100)}`);
+                        console.log(`     💥 Error: ${e.message.split('\n')[0]}`);
                     } finally {
-                        await context.close();
+                        // Only close Proxy contexts immediately. Direct/Guest are shared across categories in this market.
+                        if (tier.type === 'Proxy') await context.close().catch(() => {});
                     }
                 }
 
                 if (!success) {
                     failCount++;
-                    lastFailureReason = "All tiers failed";
+                    lastFailureReason = `${obj.name} failed all tiers`;
                 }
             }
+            
+            // Clean up market-level contexts
+            if (activeDirectContext) await activeDirectContext.close().catch(() => {});
+            if (activeGuestContext) await activeGuestContext.close().catch(() => {});
         }
     } finally {
-        await browser.close();
+        await browser.close().catch(() => {});
     }
 
-    // Final status and ingestion
     const finalStatus = failCount === 0 ? "SUCCESS" : (successCount > 0 ? "PARTIAL" : "FAILED");
     const runData = {
         run_id: runId, shard: manualShard, shards_total: SHARDS_TOTAL, status: finalStatus,
@@ -173,7 +192,7 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
         failure_reason: lastFailureReason, metadata: { successCount, failCount }
     };
 
-    console.log(`\nFinal Shard Status: ${finalStatus} (${successCount} successful, ${failCount} failed)`);
+    console.log(`\nShard Result: ${finalStatus} (${successCount} S, ${failCount} F)`);
     console.log(`Ingesting ${observations.length} items...`);
     
     await pushToApi(apiUrl, apiKey, { ...runData, status: "INGESTING" }, []);
