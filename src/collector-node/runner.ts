@@ -73,13 +73,16 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                 let attempts = 0;
                 let success = false;
 
-                while (attempts < 5 && !success) {
-                    attempts++;
                     const proxy = process.env.PROXY_URL || getRandomProxy();
+                    console.log(` -> Attempt ${attempts}/5 using Proxy: ${proxy || 'DIRECT'}`);
+                    
                     const context = await browser.newContext({
-                        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
                         viewport: { width: 1280, height: 800 },
-                        proxy: proxy ? { server: proxy } : undefined
+                        proxy: proxy ? { server: proxy } : undefined,
+                        extraHTTPHeaders: {
+                            'Accept-Language': 'en-US,en;q=0.9',
+                        }
                     });
 
                     try {
@@ -138,9 +141,11 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                         } else {
                             if (status === 401 || status === 403) {
                                 if (cookies && status === 401) markBanned(cookies);
-                                console.log(` -> HTTP ${status}. Rotating identity...`);
+                                const content = await page.content();
+                                console.log(` -> HTTP ${status} (${response?.statusText()}). Proxy: ${proxy || 'DIRECT'}`);
+                                console.log(` -> HTML Snippet: ${content.substring(0, 500).replace(/\n/g, ' ')}`);
                             }
-                            throw new Error(`HTTP ${status}`);
+                            throw new Error(`HTTP ${status} ${response?.statusText()}`);
                         }
                     } catch (e: any) {
                         if (attempts === 5) {
