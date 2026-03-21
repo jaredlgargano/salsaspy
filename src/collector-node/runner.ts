@@ -27,8 +27,9 @@ const STATE_TZ: Record<string, string> = {
 
 export async function runShard(apiUrl: string, apiKey: string, now: Date, runId: string, manualShard: number): Promise<string> {
     console.log(`Starting runShard for shard ${manualShard}`);
-
     const SHARDS_TOTAL = parseInt(process.env.SHARDS_TOTAL || "100");
+    
+    // 1. Fetch Markets
     const marketRes = await fetch(`${apiUrl}/v1/markets?shard=${manualShard}&shards_total=${SHARDS_TOTAL}&active=1&unscraped_only=1`, {
         headers: { 'Authorization': `Bearer ${apiKey}` }
     });
@@ -38,18 +39,28 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
         return "FAILED";
     }
 
-    const { markets } = await marketRes.json() as { markets: any[] };
+    let { markets } = await marketRes.json() as { markets: any[] };
     if (!markets || markets.length === 0) {
-        console.log("No markets found for this shard.");
+        console.log("No markets found for this shard. (Try manual run without unscraped_only if this is a repeat)");
+        // Fallback: fetch without unscraped_only if we explicitly asked for a forced run
+        if (process.env.FORCE_SCRAPE === "1") {
+             const mRes2 = await fetch(`${apiUrl}/v1/markets?shard=${manualShard}&shards_total=${SHARDS_TOTAL}&active=1`, {
+                 headers: { 'Authorization': `Bearer ${apiKey}` }
+             });
+             if (mRes2.ok) {
+                 const d2 = await mRes2.json() as { markets: any[] };
+                 markets = d2.markets || [];
+             }
+        }
+    }
+
+    if (markets.length === 0) {
+        console.log("Ultimately no markets found.");
         return "SUCCESS";
     }
 
-    // Process all markets returned by the API (timezone sharding handled at API level)
-    const prioritizedMarkets = markets;
-
-    console.log(`Processing ${prioritizedMarkets.length} markets.`);
+    console.log(`Processing ${markets.length} markets for Shard ${manualShard}.`);
     
-    // Launch ONE browser for the entire shard
     const browser = await chromium.launch({ 
         headless: true, 
         args: ['--no-sandbox', '--disable-setuid-sandbox'] 
@@ -62,172 +73,91 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
     const categories = ["", "Healthy", "Mexican", "Salad", "Chicken"];
 
     try {
-        for (const market of prioritizedMarkets) {
-            console.log(`Market: ${market.city}, ${market.state}`);
+        for (const market of markets) {
+            console.log(`\n🌎 Market: ${market.city}, ${market.state} (${market.latitude}, ${market.longitude})`);
 
             for (const category of categories) {
                 const categoryName = category === "" ? "Base Search" : category;
                 const pathExt = category === "" ? "Restaurants/" : `${encodeURIComponent(category)}/`;
                 const url = `https://www.doordash.com/search/store/${pathExt}?lat=${market.latitude}&lng=${market.longitude}`;
 
-                let attempts = 0;
                 let success = false;
+                const tiers = [
+                    { type: 'Proxy+Auth', useProxy: true, useCookies: true },
+                    { type: 'Direct+Auth', useProxy: false, useCookies: true },
+                    { type: 'Direct+Guest', useProxy: false, useCookies: false }
+                ];
 
-                while (attempts < 5 && !success) {
-                    attempts++;
-                    const proxy = process.env.PROXY_URL || getRandomProxy();
-                    console.log(` -> Attempt ${attempts}/5 using Proxy: ${proxy || 'DIRECT'}`);
+                for (const tier of tiers) {
+                    if (success) break;
                     
+                    const proxy = tier.useProxy ? (process.env.PROXY_URL || getRandomProxy()) : undefined;
+                    console.log(`  -> Tier: ${tier.type} | Proxy: ${proxy || 'NONE'}`);
+
                     const context = await browser.newContext({
                         userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
                         viewport: { width: 1280, height: 800 },
                         proxy: proxy ? { server: proxy } : undefined,
-                        extraHTTPHeaders: {
-                            'Accept-Language': 'en-US,en;q=0.9',
-                        }
+                        extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' }
                     });
 
                     try {
-                        const cookies = getNextCookies();
-                        if (cookies) {
-                            const cookieObjects = cookies.split('; ').map((pair: string) => {
-                                const eqIdx = pair.indexOf('=');
-                                return {
-                                    name: pair.substring(0, eqIdx),
-                                    value: pair.substring(eqIdx + 1),
+                        let cookiesStr = "";
+                        if (tier.useCookies) {
+                            cookiesStr = getNextCookies() || "";
+                            if (cookiesStr) {
+                                const cObjs = cookiesStr.split('; ').map((p: string) => ({
+                                    name: p.substring(0, p.indexOf('=')),
+                                    value: p.substring(p.indexOf('=') + 1),
                                     domain: '.doordash.com',
                                     path: '/',
-                                };
-                            });
-                            await context.addCookies(cookieObjects);
+                                }));
+                                await context.addCookies(cObjs);
+                            }
                         }
 
                         const page = await context.newPage();
-                        // Jitter
-                        await new Promise(r => setTimeout(r, 1000 + Math.random() * 2000));
-
-                        const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+                        const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 25000 });
                         const status = response?.status() || 0;
 
                         if (status === 200) {
                             const html = await page.content();
                             const result = parseListings(html);
                             if (result.status === "SUCCESS") {
-                                successCount++;
                                 success = true;
+                                successCount++;
                                 result.merchants.forEach((m: any) => {
                                     observations.push({
-                                        run_id: runId,
-                                        market_id: market.market_id,
-                                        city: market.city,
-                                        observed_at: now.toISOString(),
-                                        category: categoryName,
-                                        surface: "searchCategory",
-                                        merchant_name: m.merchant_name,
-                                        store_id: m.store_id,
-                                        rank: m.rank,
-                                        is_sponsored: m.is_sponsored,
-                                        has_discount: m.has_discount,
-                                        discount_type: m.discount_type,
-                                        delivery_fee: m.delivery_fee,
-                                        rating: m.rating,
-                                        review_count: m.review_count,
-                                        offer_title: m.offer_title,
-                                        raw_snippet: m.raw_snippet
+                                        run_id: runId, market_id: market.market_id, city: market.city,
+                                        observed_at: now.toISOString(), category: categoryName, surface: "searchCategory",
+                                        merchant_name: m.merchant_name, store_id: m.store_id, rank: m.rank,
+                                        is_sponsored: m.is_sponsored, has_discount: m.has_discount, discount_type: m.discount_type,
+                                        delivery_fee: m.delivery_fee, rating: m.rating, review_count: m.review_count,
+                                        offer_title: m.offer_title, raw_snippet: m.raw_snippet
                                     });
                                 });
-                                console.log(` -> ${categoryName}: Found ${result.merchants.length}`);
+                                console.log(`     ✅ SUCCESS: ${result.merchants.length} merchants found.`);
                             } else {
-                                throw new Error(`Parse failed: ${result.status}`);
+                                console.log(`     ⚠️ Parse Failed (${result.status})`);
                             }
                         } else {
-                            if (status === 401 || status === 403) {
-                                if (cookies && status === 401) markBanned(cookies);
-                                const content = await page.content();
-                                console.log(` -> HTTP ${status} (${response?.statusText()}). Proxy: ${proxy || 'DIRECT'}`);
-                                console.log(` -> HTML Snippet: ${content.substring(0, 500).replace(/\n/g, ' ')}`);
+                            console.log(`     ❌ HTTP ${status} (${response?.statusText()})`);
+                            if (status === 401 && cookiesStr) markBanned(cookiesStr);
+                            if (status === 403) {
+                                const snippet = (await page.content()).substring(0, 200).replace(/\n/g, ' ');
+                                console.log(`     🚩 403 Detail: ${snippet}`);
                             }
-                            throw new Error(`HTTP ${status} ${response?.statusText()}`);
                         }
                     } catch (e: any) {
-                        if (attempts === 5) {
-                            failCount++;
-                            lastFailureReason = e.message;
-                            console.log(` -> Failed ${categoryName} after ${attempts} attempts: ${e.message}`);
-                        } else {
-                            await new Promise(r => setTimeout(r, 2000));
-                        }
+                        console.log(`     💥 Error: ${e.message.substring(0, 100)}`);
                     } finally {
                         await context.close();
                     }
                 }
-            }
 
-            // Best of Lunch
-            const lunchUrl = `https://www.doordash.com/search/store/best%20of%20lunch/?lat=${market.latitude}&lng=${market.longitude}`;
-            let lAttempts = 0;
-            let lSuccess = false;
-
-            while (lAttempts < 5 && !lSuccess) {
-                lAttempts++;
-                const lProxy = process.env.PROXY_URL || getRandomProxy();
-                const lContext = await browser.newContext({ 
-                    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-                    proxy: lProxy ? { server: lProxy } : undefined,
-                    extraHTTPHeaders: {
-                        'Accept-Language': 'en-US,en;q=0.9',
-                    }
-                });
-                try {
-                    const lCookies = getNextCookies();
-                    if (lCookies) {
-                        const cObjs = lCookies.split('; ').map((p: string) => ({
-                            name: p.substring(0, p.indexOf('=')),
-                            value: p.substring(p.indexOf('=') + 1),
-                            domain: '.doordash.com',
-                            path: '/',
-                        }));
-                        await lContext.addCookies(cObjs);
-                    }
-                    const lPage = await lContext.newPage();
-                    const lRes = await lPage.goto(lunchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-                    if (lRes?.status() === 200) {
-                        const lHtml = await lPage.content();
-                        const lResult = parseListings(lHtml);
-                        if (lResult.status === "SUCCESS") {
-                            lSuccess = true;
-                            successCount++;
-                            lResult.merchants.forEach((m: any) => {
-                                observations.push({
-                                    run_id: runId,
-                                    market_id: market.market_id,
-                                    city: market.city,
-                                    observed_at: now.toISOString(),
-                                    category: "None",
-                                    surface: "bestOfLunch",
-                                    merchant_name: m.merchant_name,
-                                    store_id: m.store_id,
-                                    rank: m.rank,
-                                    is_sponsored: m.is_sponsored,
-                                    has_discount: m.has_discount,
-                                    discount_type: m.discount_type,
-                                    delivery_fee: m.delivery_fee,
-                                    rating: m.rating,
-                                    review_count: m.review_count,
-                                    offer_title: m.offer_title,
-                                    raw_snippet: m.raw_snippet
-                                });
-                            });
-                            console.log(` -> Best of Lunch: Found ${lResult.merchants.length}`);
-                        }
-                    } else {
-                        throw new Error(`HTTP ${lRes?.status()}`);
-                    }
-                } catch (e: any) {
-                    if (lAttempts === 5) console.log(` -> Failed Best of Lunch: ${e.message}`);
-                    else await new Promise(r => setTimeout(r, 2000));
-                } finally {
-                    await lContext.close();
+                if (!success) {
+                    failCount++;
+                    lastFailureReason = "All tiers failed";
                 }
             }
         }
@@ -235,27 +165,23 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
         await browser.close();
     }
 
+    // Final status and ingestion
     const finalStatus = failCount === 0 ? "SUCCESS" : (successCount > 0 ? "PARTIAL" : "FAILED");
     const runData = {
-        run_id: runId,
-        started_at: now.toISOString(),
-        ended_at: new Date().toISOString(),
-        shard: manualShard,
-        shards_total: SHARDS_TOTAL,
-        status: finalStatus,
-        failure_reason: lastFailureReason,
-        metadata: { successCount, failCount }
+        run_id: runId, shard: manualShard, shards_total: SHARDS_TOTAL, status: finalStatus,
+        started_at: now.toISOString(), ended_at: new Date().toISOString(),
+        failure_reason: lastFailureReason, metadata: { successCount, failCount }
     };
 
+    console.log(`\nFinal Shard Status: ${finalStatus} (${successCount} successful, ${failCount} failed)`);
     console.log(`Ingesting ${observations.length} items...`);
-    await pushToApi(apiUrl, apiKey, { ...runData, status: "INGESTING" }, []);
     
-    // Chunking
+    await pushToApi(apiUrl, apiKey, { ...runData, status: "INGESTING" }, []);
     const CHUNK = 500;
     for (let i = 0; i < observations.length; i += CHUNK) {
-        await pushToApi(apiUrl, apiKey, null, observations.slice(i, i + CHUNK));
+         await pushToApi(apiUrl, apiKey, null, observations.slice(i, i + CHUNK));
     }
-
     await pushToApi(apiUrl, apiKey, runData, []);
+
     return finalStatus;
 }
