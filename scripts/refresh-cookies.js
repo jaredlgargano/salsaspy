@@ -41,8 +41,6 @@ async function refreshAccount(account, index) {
     console.log(`\n[${index + 1}] Refreshing: ${account.email}`);
 
     const profileDir = path.join(TEMP_PROFILE_BASE, `dd-refresh-${index}`);
-
-    // Parse cookie string into Playwright cookie objects for doordash.com
     const cookieObjects = account.cookies.split('; ').map(pair => {
         const eqIdx = pair.indexOf('=');
         return {
@@ -63,20 +61,31 @@ async function refreshAccount(account, index) {
     });
 
     try {
-        // Pre-load the existing cookies
         await browser.addCookies(cookieObjects);
-
         const page = browser.pages()[0] || await browser.newPage();
 
-        // Visit the orders page — this is more likely to trigger a full session extension than the homepage
+        console.log('  -> Visiting Home...');
+        await page.goto('https://www.doordash.com/food-delivery/', { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.waitForTimeout(2000);
+
+        console.log('  -> Simulating Search Interaction...');
+        // Visit a search page to trigger more session activity than just orders
+        await page.goto('https://www.doordash.com/search/food/mexican/?lat=41.6528&lng=-83.5379', {
+            waitUntil: 'domcontentloaded',
+            timeout: 30000
+        });
+
+        await page.evaluate(() => window.scrollBy(0, 1000));
+        await page.waitForTimeout(3000);
+
+        // Click a random store if possible (simulated via navigation)
+        console.log('  -> Deep Linking to Store...');
         await page.goto('https://www.doordash.com/orders', {
             waitUntil: 'domcontentloaded',
             timeout: 20000
         });
+        await page.waitForTimeout(2000);
 
-        await page.waitForTimeout(3000);
-
-        // Capture the new (refreshed) cookies
         const newCookies = await browser.cookies('https://www.doordash.com');
         const newCookieStr = newCookies.map(c => `${c.name}=${c.value}`).join('; ');
 
@@ -84,13 +93,11 @@ async function refreshAccount(account, index) {
         const isLoggedIn = newCookieStr.includes('dd_cx_logged_in=true');
 
         if (!isLoggedIn) {
-            console.log(`  ⚠️  Session expired for ${account.email} — manual re-login required ('npm run export-cookies')`);
-            // Do NOT overwrite 'banned' status here. If it was banned in the scraper, 
-            // it stays banned until manually refreshed or proven active.
+            console.log(`  ⚠️  Session expired for ${account.email} — manual re-login required.`);
             return { ...account, cookies: account.cookies, needsRelogin: true };
         }
 
-        console.log(`  ✅ Refreshed. New expiry: ${newExpiry ? newExpiry.toDateString() : 'unknown'}`);
+        console.log(`  ✅ Refreshed. New expiry: ${newExpiry ? newExpiry.toUTCString() : 'unknown'}`);
         return { ...account, cookies: newCookieStr };
 
     } finally {

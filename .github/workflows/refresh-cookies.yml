@@ -2,8 +2,8 @@ name: Refresh DoorDash Cookies
 
 on:
   schedule:
-    # Runs every day at 6 AM UTC to refresh sessions before they expire
-    - cron: '0 6 * * *'
+    # Runs every 6 hours to ensure sessions never go idle
+    - cron: '0 */6 * * *'
   workflow_dispatch:  # Allow manual trigger from GitHub Actions UI
 
 jobs:
