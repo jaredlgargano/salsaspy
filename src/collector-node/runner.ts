@@ -122,11 +122,18 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
 
                             if (status === 200) {
                                 await page.waitForTimeout(3000);
+                                
+                                const preScrollHtml = await page.content();
+                                const preScrollResult = parseListings(preScrollHtml);
+                                console.log(`     📊 Audit: Static count = ${preScrollResult.merchants.length}`);
+
                                 await scrollToEnd(page);
                                 await page.waitForTimeout(1000);
 
                                 const html = await page.content();
                                 const result = parseListings(html);
+                                console.log(`     ✅ Audit: Final count = ${result.merchants.length} (+${result.merchants.length - preScrollResult.merchants.length})`);
+
                                 if (result.status === "SUCCESS") {
                                     success = true;
                                     successCount++;
