@@ -5,6 +5,7 @@ import { chromium } from "playwright-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import { getRandomProxy } from "./freeProxy";
 import { Browser, BrowserContext, Page } from "playwright";
+import { gotScraping } from 'got-scraping';
 
 chromium.use(StealthPlugin());
 
@@ -86,6 +87,52 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                         if (success) break;
                         const proxy = tier.useProxy ? (process.env.PROXY_URL || getRandomProxy()) : undefined;
                         
+                        // --- Tier Path: GOT-SCRAPING (Free Stealth Path) ---
+                        if (tier.type === 'Proxy') {
+                            console.log(`  -> [${obj.name}] Tier: Proxy (Try ${r+1}/${tier.retries}) | Proxy: ${proxy ? 'YES' : 'NONE'}`);
+                            try {
+                                const cookiesStr = getNextCookies() || "";
+                                const response = await gotScraping({
+                                    url,
+                                    proxyUrl: proxy || undefined,
+                                    headers: cookiesStr ? { 'Cookie': cookiesStr } : {},
+                                    headerGeneratorOptions: { browsers: ['chrome'], os: ['macos', 'windows'] },
+                                    timeout: { request: 15000 }
+                                });
+
+                                if (response.statusCode === 200) {
+                                    const result = parseListings(response.body);
+                                    if (result.status === "SUCCESS") {
+                                        console.log(`     ✅ GOT Success: Found ${result.merchants.length}`);
+                                        success = true;
+                                        successCount++;
+                                        result.merchants.forEach((m: any) => {
+                                            observations.push({
+                                                run_id: runId, market_id: market.market_id, city: market.city,
+                                                observed_at: now.toISOString(), category: obj.surface === "bestOfLunch" ? "None" : (obj.name === "Home" ? "None" : obj.name), 
+                                                surface: obj.surface, merchant_name: m.merchant_name, store_id: m.store_id, 
+                                                rank: m.rank, is_sponsored: m.is_sponsored, has_discount: m.has_discount, 
+                                                delivery_fee: m.delivery_fee, rating: m.rating, review_count: m.review_count,
+                                                raw_snippet: m.raw_snippet
+                                            });
+                                        });
+                                        break;
+                                    } else {
+                                        console.log(`     ⚠️ GOT Parse: ${result.status}`);
+                                    }
+                                } else if (response.statusCode === 401 && cookiesStr) {
+                                    markBanned(cookiesStr);
+                                }
+                            } catch (e: any) {
+                                console.log(`     💥 GOT Error: ${e.message.split('\n')[0]}`);
+                                if (e.message.includes('exhausted')) {
+                                     console.log('     🛑 ScraperAPI Credits Exhausted. Continuing with free proxies...');
+                                }
+                            }
+                            continue;
+                        }
+
+                        // --- Tier Path: PLAYWRIGHT (Direct/Guest Path) ---
                         let context: BrowserContext;
                         const MODERN_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
                         
