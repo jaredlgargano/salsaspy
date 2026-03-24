@@ -5,7 +5,6 @@ import { chromium } from "playwright-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import { getRandomProxy } from "./freeProxy";
 import { Browser, BrowserContext, Page } from "playwright";
-import { gotScraping } from 'got-scraping';
 
 chromium.use(StealthPlugin());
 
@@ -73,9 +72,9 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                 const url = `https://www.doordash.com/${obj.path}?lat=${market.latitude}&lng=${market.longitude}`;
                 let success = false;
                 
-                // Tier Strategy: 10 Free Proxies -> 1 Direct -> 1 Guest
+                // Tier Strategy: 5 Free Stealth Proxies -> 1 Direct -> 1 Guest
                 const tiers = [
-                    { type: 'Proxy', useProxy: true, useCookies: true, retries: 10 },
+                    { type: 'Proxy', useProxy: true, useCookies: true, retries: 5 },
                     { type: 'Direct', useProxy: false, useCookies: true, retries: 1 },
                     { type: 'Guest', useProxy: false, useCookies: false, retries: 1 }
                 ];
@@ -91,13 +90,14 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                         if (tier.type === 'Proxy') {
                             console.log(`  -> [${obj.name}] Tier: Proxy (Try ${r+1}/${tier.retries}) | Proxy: ${proxy ? 'YES' : 'NONE'}`);
                             try {
+                                const { gotScraping } = await import('got-scraping');
                                 const cookiesStr = getNextCookies() || "";
                                 const response = await gotScraping({
                                     url,
                                     proxyUrl: proxy || undefined,
                                     headers: cookiesStr ? { 'Cookie': cookiesStr } : {},
                                     headerGeneratorOptions: { browsers: ['chrome'], os: ['macos', 'windows'] },
-                                    timeout: { request: 15000 }
+                                    timeout: { request: 8000 }
                                 });
 
                                 if (response.statusCode === 200) {
