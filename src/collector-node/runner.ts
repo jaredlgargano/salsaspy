@@ -14,8 +14,8 @@ async function scrollToEnd(page: Page) {
             let totalHeight = 0;
             const distance = 400;
             const timer = setInterval(() => {
-                const scrollHeight = document.body.scrollHeight;
-                window.scrollBy(0, distance);
+                const scrollHeight = (document as any).body.scrollHeight;
+                (window as any).scrollBy(0, distance);
                 totalHeight += distance;
                 if (totalHeight >= scrollHeight || totalHeight > 6000) {
                     clearInterval(timer);
@@ -117,7 +117,7 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                             const page = await context.newPage();
                             console.log(`  -> [${obj.name}] Tier: ${tier.type} (Try ${r+1}/${tier.retries}) | Proxy: ${proxy ? 'YES' : 'NONE'}`);
 
-                            const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 35000 });
+                            const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
                             const status = response?.status() || 0;
 
                             if (status === 200) {
@@ -158,6 +158,7 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                             await page.close();
                         } catch (e: any) {
                             console.log(`     💥 Error: ${e.message.split('\n')[0]}`);
+                            await new Promise(r => setTimeout(r, 2000));
                         } finally {
                             if (tier.type === 'Proxy') await context.close().catch(() => {});
                         }
