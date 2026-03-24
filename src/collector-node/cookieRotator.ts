@@ -1,5 +1,8 @@
 import fs from 'fs';
 import path from 'path';
+import dotenv from 'dotenv';
+
+dotenv.config({ path: '.dev.vars' });
 
 const ACCOUNTS_PATH = path.resolve(process.cwd(), 'accounts.json');
 const MAX_REQUESTS_PER_ACCOUNT_PER_DAY = 1000;
@@ -24,6 +27,7 @@ export interface Account {
     last_used: number;
     request_count: number;
     banned: boolean;
+    _comment?: string;
 }
 
 function loadAccounts(): Account[] {
@@ -115,6 +119,30 @@ export function markBanned(cookies: string): void {
         account.banned = true;
         fs.writeFileSync(ACCOUNTS_PATH, JSON.stringify(all, null, 2));
         console.warn(`[CookieRotator] Marked account ${account.email} as banned.`);
+
+        // --- Real-time Sync to API ---
+        const apiUrl = process.env.API_URL;
+        const apiKey = process.env.API_KEY || process.env.SCRAPER_API_KEY;
+
+        if (apiUrl && apiKey) {
+            console.log(`[CookieRotator] 🔄 Syncing ban for ${account.email} to remote API...`);
+            // We use a fire-and-forget style fetch here to avoid blocking the scraper
+            fetch(`${apiUrl}/v1/status/cookies/sync`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify({
+                    accounts: all.filter(a => !a._comment).map(a => ({
+                        email: a.email,
+                        label: a.label,
+                        status: a.banned ? 'Banned' : (getJwtExpiry(a.cookies) && getJwtExpiry(a.cookies)! < new Date() ? 'Expired' : 'Active'),
+                        expiry_at: getJwtExpiry(a.cookies)?.toISOString() || null
+                    }))
+                })
+            }).catch(err => console.error(`[CookieRotator] ❌ Remote ban sync failed: ${err.message}`));
+        }
     }
 }
 

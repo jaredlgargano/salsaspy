@@ -151,26 +151,36 @@ export function setupRoutes(app: Hono<{ Bindings: ApiEnv }>) {
         const shard = c.req.query("shard");
         const totalShards = c.req.query("shards_total");
         const unscrapedOnly = c.req.query("unscraped_only") === "1";
+        const lunchtimeOnly = c.req.query("lunchtime_only") === "1";
 
-        let query = "SELECT m.*, m.rowid FROM markets m";
+        let query = "SELECT m.*, m.name as city, m.rowid FROM markets m";
         const params: any[] = [];
         const conditions = [];
 
         if (unscrapedOnly) {
             query = `
-                SELECT m.*, m.rowid FROM markets m
+                SELECT m.*, m.name as city, m.rowid FROM markets m
                 LEFT JOIN (
                     SELECT market_id, MAX(observed_at) as last_obs
                     FROM observations
                     GROUP BY market_id
                 ) o ON m.market_id = o.market_id
             `;
-            conditions.push("(o.last_obs IS NULL OR o.last_obs < datetime('now', '-18 hours'))");
+            conditions.push("(o.last_obs IS NULL OR o.last_obs < datetime('now', '-20 hours'))");
         }
 
         if (c.req.query("active") !== undefined) {
             conditions.push("m.active = ?");
             params.push(active);
+        }
+
+        // --- Lunchtime Filter ---
+        // We check if the local time in the market is between 12:00 PM and 1:00 PM
+        if (lunchtimeOnly) {
+            // SQLite's datetime('now') is UTC.
+            // Local time = UTC + utc_offset
+            // Window: 12:00 (inclusive) to 13:00 (exclusive)
+            conditions.push("CAST(strftime('%H', datetime('now', m.timezone_offset || ' hours')) AS INTEGER) = 12");
         }
 
         // Return only markets assigned to this shard
@@ -406,13 +416,69 @@ export function setupRoutes(app: Hono<{ Bindings: ApiEnv }>) {
         }, 400);
     });
 
+    // DMA Pivot (Admin)
+    app.post("/v1/markets/pivot", authMiddleware, async (c) => {
+        try {
+            const { markets } = await c.req.json() as { markets: any[] };
+            console.log(`Pivot request received with ${markets?.length} markets`);
+            
+            // 1. Ensure schema has timezone_offset
+            try {
+                await c.env.DB.prepare("ALTER TABLE markets ADD COLUMN timezone_offset INTEGER DEFAULT 0").run();
+                console.log("timezone_offset column checked/added");
+            } catch (e: any) {
+                console.log("Note: timezone_offset column might already exist or alter failed:", e.message);
+            }
+
+            // 2. Deactivate existing
+            await c.env.DB.prepare("UPDATE markets SET active = 0").run();
+            console.log("Existing markets deactivated");
+
+            // 3. Batch insert new DMAs
+            if (markets && markets.length > 0) {
+                const stmt = c.env.DB.prepare(`
+                    INSERT INTO markets (market_id, name, latitude, longitude, timezone_offset, active, created_at)
+                    VALUES (?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+                    ON CONFLICT(market_id) DO UPDATE SET 
+                        active = 1,
+                        latitude = excluded.latitude,
+                        longitude = excluded.longitude,
+                        timezone_offset = excluded.timezone_offset
+                `);
+                
+                const statements = markets.map(m => {
+                    if (!m.rank || !m.name) console.error("Invalid market data:", m);
+                    return stmt.bind(
+                        `dma-${m.rank}`,
+                        m.name,
+                        m.latitude,
+                        m.longitude,
+                        m.utc_offset || 0
+                    );
+                });
+                
+                // Chunk the statements into batches of 100 to satisfy D1 limits
+                const CHUNK_SIZE = 100;
+                for (let i = 0; i < statements.length; i += CHUNK_SIZE) {
+                    const chunk = statements.slice(i, i + CHUNK_SIZE);
+                    console.log(`Executing batch for ${chunk.length} statements (chunk ${i/CHUNK_SIZE + 1})`);
+                    await c.env.DB.batch(chunk);
+                }
+                console.log("All batches completed");
+            }
+
+            return c.json({ success: true, count: markets?.length });
+        } catch (err: any) {
+            console.error("PIVOT ERROR:", err.message, err.stack);
+            return c.json({ error: err.message, stack: err.stack }, 500);
+        }
+    });
+
     // Manual recompute
     app.post("/v1/recompute", authMiddleware, async (c) => {
-        const date = c.req.query("date");
-        if (!date) return c.json({ error: "Missing date parameter requried" }, 400);
-
-        c.executionCtx.waitUntil(recomputeAggregatesForDate(c.env.DB, date));
-        return c.json({ status: "recompute_started", date });
+        const { date } = await c.req.json() as { date: string };
+        await recomputeAggregatesForDate(c.env.DB, date);
+        return c.json({ success: true });
     });
 
     // Ingest data from external Node.js Playwright script

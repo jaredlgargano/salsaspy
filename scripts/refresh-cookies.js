@@ -64,30 +64,42 @@ async function refreshAccount(account, index) {
         await browser.addCookies(cookieObjects);
         const page = browser.pages()[0] || await browser.newPage();
 
+        // Get initial token to compare later
+        const oldCookies = await browser.cookies('https://www.doordash.com');
+        const oldToken = oldCookies.find(c => c.name === 'ddweb_token')?.value;
+
         console.log('  -> Visiting Home...');
         await page.goto('https://www.doordash.com/food-delivery/', { waitUntil: 'domcontentloaded', timeout: 30000 });
         await page.waitForTimeout(2000);
 
-        console.log('  -> Simulating Search Interaction...');
-        // Visit a search page to trigger more session activity than just orders
-        await page.goto('https://www.doordash.com/search/food/mexican/?lat=41.6528&lng=-83.5379', {
-            waitUntil: 'domcontentloaded',
-            timeout: 30000
+        console.log('  -> Triggering GraphQL Identity Check...');
+        // Perform a GraphQL call that requires auth to force a Set-Cookie: ddweb_token response
+        const gqlStatus = await page.evaluate(async () => {
+            try {
+                const res = await fetch('/graphql', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        operationName: 'getAuthenticatedUser',
+                        variables: {},
+                        query: 'query getAuthenticatedUser { authenticatedUser { id email } }'
+                    })
+                });
+                return res.status;
+            } catch (e) { return -1; }
         });
+        console.log(`     (GQL Status: ${gqlStatus})`);
 
-        await page.evaluate(() => window.scrollBy(0, 1000));
-        await page.waitForTimeout(3000);
-
-        // Click a random store if possible (simulated via navigation)
-        console.log('  -> Deep Linking to Store...');
+        console.log('  -> Deep Linking to Account/Orders...');
         await page.goto('https://www.doordash.com/orders', {
             waitUntil: 'domcontentloaded',
             timeout: 20000
         });
-        await page.waitForTimeout(2000);
+        await page.waitForTimeout(3000);
 
         const newCookies = await browser.cookies('https://www.doordash.com');
         const newCookieStr = newCookies.map(c => `${c.name}=${c.value}`).join('; ');
+        const newToken = newCookies.find(c => c.name === 'ddweb_token')?.value;
 
         const newExpiry = getJwtExpiry(newCookieStr);
         const isLoggedIn = newCookieStr.includes('dd_cx_logged_in=true');
@@ -97,7 +109,13 @@ async function refreshAccount(account, index) {
             return { ...account, cookies: account.cookies, needsRelogin: true };
         }
 
-        console.log(`  ✅ Refreshed. New expiry: ${newExpiry ? newExpiry.toUTCString() : 'unknown'}`);
+        if (oldToken && newToken && oldToken === newToken) {
+            console.log(`  ⚠️  Warning: Token did NOT change. Extension might have failed.`);
+        } else if (newToken) {
+            console.log(`  ✨ Token Refreshed!`);
+        }
+
+        console.log(`  ✅ Current expiry: ${newExpiry ? newExpiry.toUTCString() : 'unknown'}`);
         return { ...account, cookies: newCookieStr };
 
     } finally {

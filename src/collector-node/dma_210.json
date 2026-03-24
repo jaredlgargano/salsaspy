@@ -1,0 +1,1472 @@
+[
+  {
+    "rank": 1,
+    "name": "New York",
+    "latitude": 40.7128,
+    "longitude": -74.006,
+    "utc_offset": -5
+  },
+  {
+    "rank": 2,
+    "name": "Los Angeles",
+    "latitude": 34.0522,
+    "longitude": -118.2437,
+    "utc_offset": -8
+  },
+  {
+    "rank": 3,
+    "name": "Chicago",
+    "latitude": 41.8781,
+    "longitude": -87.6298,
+    "utc_offset": -6
+  },
+  {
+    "rank": 4,
+    "name": "Dallas\u2013Fort Worth",
+    "latitude": 32.7767,
+    "longitude": -96.797,
+    "utc_offset": -6
+  },
+  {
+    "rank": 5,
+    "name": "Philadelphia",
+    "latitude": 39.9526,
+    "longitude": -75.1631,
+    "utc_offset": -5
+  },
+  {
+    "rank": 6,
+    "name": "Houston",
+    "latitude": 29.7633,
+    "longitude": -95.3632,
+    "utc_offset": -6
+  },
+  {
+    "rank": 7,
+    "name": "Atlanta",
+    "latitude": 33.749,
+    "longitude": -84.388,
+    "utc_offset": -5
+  },
+  {
+    "rank": 8,
+    "name": "Washington, D.C. (Hagerstown)",
+    "latitude": 38.8951,
+    "longitude": -77.0365,
+    "utc_offset": -5
+  },
+  {
+    "rank": 9,
+    "name": "Boston (Manchester)",
+    "latitude": 42.3584,
+    "longitude": -71.0596,
+    "utc_offset": -5
+  },
+  {
+    "rank": 10,
+    "name": "San Francisco\u2013Oakland\u2013San Jose",
+    "latitude": 37.7749,
+    "longitude": -122.4194,
+    "utc_offset": -8
+  },
+  {
+    "rank": 11,
+    "name": "Tampa\u2013St. Petersburg (Sarasota)",
+    "latitude": 27.9506,
+    "longitude": -82.4575,
+    "utc_offset": -5
+  },
+  {
+    "rank": 12,
+    "name": "Phoenix (Prescott)",
+    "latitude": 33.4484,
+    "longitude": -112.0759,
+    "utc_offset": -7
+  },
+  {
+    "rank": 13,
+    "name": "Seattle\u2013Tacoma",
+    "latitude": 47.6067,
+    "longitude": -122.3321,
+    "utc_offset": -8
+  },
+  {
+    "rank": 14,
+    "name": "Detroit",
+    "latitude": 42.3314,
+    "longitude": -83.0457,
+    "utc_offset": -5
+  },
+  {
+    "rank": 15,
+    "name": "Orlando\u2013Daytona Beach\u2013Melbourne",
+    "latitude": 28.5383,
+    "longitude": -81.3789,
+    "utc_offset": -5
+  },
+  {
+    "rank": 16,
+    "name": "Minneapolis\u2013St. Paul",
+    "latitude": 44.9778,
+    "longitude": -93.265,
+    "utc_offset": -6
+  },
+  {
+    "rank": 17,
+    "name": "Denver",
+    "latitude": 39.7392,
+    "longitude": -104.9903,
+    "utc_offset": -7
+  },
+  {
+    "rank": 18,
+    "name": "Miami\u2013Fort Lauderdale",
+    "latitude": 25.7617,
+    "longitude": -80.1918,
+    "utc_offset": -5
+  },
+  {
+    "rank": 19,
+    "name": "Cleveland\u2013Akron (Canton)",
+    "latitude": 41.4798,
+    "longitude": -81.6845,
+    "utc_offset": -5
+  },
+  {
+    "rank": 20,
+    "name": "Sacramento\u2013Stockton\u2013Modesto",
+    "latitude": 38.5816,
+    "longitude": -121.4944,
+    "utc_offset": -8
+  },
+  {
+    "rank": 21,
+    "name": "Charlotte",
+    "latitude": 35.2271,
+    "longitude": -80.8452,
+    "utc_offset": -5
+  },
+  {
+    "rank": 22,
+    "name": "Raleigh\u2013Durham (Fayetteville)",
+    "latitude": 35.7749,
+    "longitude": -78.6382,
+    "utc_offset": -5
+  },
+  {
+    "rank": 23,
+    "name": "Portland, OR",
+    "latitude": 45.5236,
+    "longitude": -122.675,
+    "utc_offset": -8
+  },
+  {
+    "rank": 24,
+    "name": "St. Louis",
+    "latitude": 38.627,
+    "longitude": -90.1994,
+    "utc_offset": -6
+  },
+  {
+    "rank": 25,
+    "name": "Indianapolis",
+    "latitude": 39.7683,
+    "longitude": -86.1581,
+    "utc_offset": -5
+  },
+  {
+    "rank": 26,
+    "name": "Nashville",
+    "latitude": 36.1627,
+    "longitude": -86.7816,
+    "utc_offset": -6
+  },
+  {
+    "rank": 27,
+    "name": "Pittsburgh",
+    "latitude": 40.4406,
+    "longitude": -79.9959,
+    "utc_offset": -5
+  },
+  {
+    "rank": 28,
+    "name": "Salt Lake City",
+    "latitude": 40.7608,
+    "longitude": -111.8904,
+    "utc_offset": -7
+  },
+  {
+    "rank": 29,
+    "name": "Baltimore",
+    "latitude": 39.2951,
+    "longitude": -76.6167,
+    "utc_offset": -5
+  },
+  {
+    "rank": 30,
+    "name": "San Diego",
+    "latitude": 32.7157,
+    "longitude": -117.1611,
+    "utc_offset": -8
+  },
+  {
+    "rank": 31,
+    "name": "San Antonio",
+    "latitude": 29.4241,
+    "longitude": -98.4936,
+    "utc_offset": -6
+  },
+  {
+    "rank": 32,
+    "name": "Hartford\u2013New Haven",
+    "latitude": 41.8369,
+    "longitude": -72.6777,
+    "utc_offset": -5
+  },
+  {
+    "rank": 33,
+    "name": "Kansas City",
+    "latitude": 39.0997,
+    "longitude": -94.5783,
+    "utc_offset": -6
+  },
+  {
+    "rank": 34,
+    "name": "Austin, TX",
+    "latitude": 30.2672,
+    "longitude": -97.7431,
+    "utc_offset": -6
+  },
+  {
+    "rank": 35,
+    "name": "Columbus, OH",
+    "latitude": 39.9612,
+    "longitude": -82.9988,
+    "utc_offset": -5
+  },
+  {
+    "rank": 36,
+    "name": "Greenville\u2013Spartanburg\u2013Asheville\u2013Anderson",
+    "latitude": 34.8515,
+    "longitude": -82.2673,
+    "utc_offset": -5
+  },
+  {
+    "rank": 37,
+    "name": "Cincinnati",
+    "latitude": 39.1039,
+    "longitude": -84.512,
+    "utc_offset": -5
+  },
+  {
+    "rank": 38,
+    "name": "Milwaukee",
+    "latitude": 43.04,
+    "longitude": -87.92,
+    "utc_offset": -6
+  },
+  {
+    "rank": 39,
+    "name": "West Palm Beach\u2013Fort Pierce",
+    "latitude": 26.7153,
+    "longitude": -80.0636,
+    "utc_offset": -5
+  },
+  {
+    "rank": 40,
+    "name": "Las Vegas",
+    "latitude": 36.1695,
+    "longitude": -115.1398,
+    "utc_offset": -8
+  },
+  {
+    "rank": 41,
+    "name": "Jacksonville",
+    "latitude": 30.3321,
+    "longitude": -81.6556,
+    "utc_offset": -5
+  },
+  {
+    "rank": 42,
+    "name": "Harrisburg\u2013Lancaster\u2013Lebanon\u2013York",
+    "latitude": 40.2732,
+    "longitude": -76.8833,
+    "utc_offset": -5
+  },
+  {
+    "rank": 43,
+    "name": "Grand Rapids\u2013Kalamazoo\u2013Battle Creek",
+    "latitude": 42.9634,
+    "longitude": -85.6025,
+    "utc_offset": -5
+  },
+  {
+    "rank": 44,
+    "name": "Norfolk\u2013Portsmouth\u2013Newport News",
+    "latitude": 36.8509,
+    "longitude": -76.2982,
+    "utc_offset": -5
+  },
+  {
+    "rank": 45,
+    "name": "Birmingham (Anniston and Tuscaloosa)",
+    "latitude": 33.5207,
+    "longitude": -86.8025,
+    "utc_offset": -6
+  },
+  {
+    "rank": 46,
+    "name": "Greensboro\u2013High Point\u2013Winston\u2013Salem",
+    "latitude": 36.0726,
+    "longitude": -79.9789,
+    "utc_offset": -5
+  },
+  {
+    "rank": 47,
+    "name": "Oklahoma City",
+    "latitude": 35.4823,
+    "longitude": -97.5354,
+    "utc_offset": -6
+  },
+  {
+    "rank": 48,
+    "name": "Albuquerque\u2013Santa Fe",
+    "latitude": 35.0853,
+    "longitude": -106.6474,
+    "utc_offset": -7
+  },
+  {
+    "rank": 49,
+    "name": "Louisville",
+    "latitude": 38.2546,
+    "longitude": -85.7594,
+    "utc_offset": -5
+  },
+  {
+    "rank": 50,
+    "name": "New Orleans",
+    "latitude": 29.9517,
+    "longitude": -90.0715,
+    "utc_offset": -6
+  },
+  {
+    "rank": 51,
+    "name": "Memphis",
+    "latitude": 35.1495,
+    "longitude": -90.049,
+    "utc_offset": -6
+  },
+  {
+    "rank": 52,
+    "name": "Providence\u2013New Bedford",
+    "latitude": 41.824,
+    "longitude": -71.4128,
+    "utc_offset": -5
+  },
+  {
+    "rank": 53,
+    "name": "Fort Myers\u2013Naples",
+    "latitude": 26.142,
+    "longitude": -81.7948,
+    "utc_offset": -5
+  },
+  {
+    "rank": 54,
+    "name": "Buffalo",
+    "latitude": 42.8864,
+    "longitude": -78.8784,
+    "utc_offset": -5
+  },
+  {
+    "rank": 55,
+    "name": "Fresno\u2013Visalia",
+    "latitude": 36.7378,
+    "longitude": -119.7871,
+    "utc_offset": -8
+  },
+  {
+    "rank": 56,
+    "name": "Richmond\u2013Petersburg",
+    "latitude": 37.5407,
+    "longitude": -77.436,
+    "utc_offset": -5
+  },
+  {
+    "rank": 57,
+    "name": "Mobile\u2013Pensacola (Fort Walton Beach)",
+    "latitude": 30.6954,
+    "longitude": -88.0399,
+    "utc_offset": -6
+  },
+  {
+    "rank": 58,
+    "name": "Little Rock\u2013Pine Bluff",
+    "latitude": 34.7465,
+    "longitude": -92.2896,
+    "utc_offset": -6
+  },
+  {
+    "rank": 59,
+    "name": "Wilkes-Barre\u2013Scranton\u2013Hazleton",
+    "latitude": 41.4089,
+    "longitude": -75.6624,
+    "utc_offset": -5
+  },
+  {
+    "rank": 60,
+    "name": "Knoxville",
+    "latitude": 35.9606,
+    "longitude": -83.9207,
+    "utc_offset": -5
+  },
+  {
+    "rank": 61,
+    "name": "Tulsa",
+    "latitude": 36.154,
+    "longitude": -95.9928,
+    "utc_offset": -6
+  },
+  {
+    "rank": 62,
+    "name": "Albany\u2013Schenectady\u2013Troy",
+    "latitude": 42.6526,
+    "longitude": -73.7562,
+    "utc_offset": -5
+  },
+  {
+    "rank": 63,
+    "name": "Lexington",
+    "latitude": 38.0406,
+    "longitude": -84.5037,
+    "utc_offset": -5
+  },
+  {
+    "rank": 64,
+    "name": "Dayton",
+    "latitude": 39.7589,
+    "longitude": -84.1916,
+    "utc_offset": -5
+  },
+  {
+    "rank": 65,
+    "name": "Tucson (Sierra Vista)",
+    "latitude": 32.2226,
+    "longitude": -110.9747,
+    "utc_offset": -7
+  },
+  {
+    "rank": 66,
+    "name": "Spokane",
+    "latitude": 47.6588,
+    "longitude": -117.426,
+    "utc_offset": -8
+  },
+  {
+    "rank": 67,
+    "name": "Des Moines\u2013Ames",
+    "latitude": 41.5868,
+    "longitude": -93.625,
+    "utc_offset": -6
+  },
+  {
+    "rank": 68,
+    "name": "Green Bay\u2013Appleton",
+    "latitude": 44.5133,
+    "longitude": -88.0133,
+    "utc_offset": -6
+  },
+  {
+    "rank": 69,
+    "name": "Honolulu",
+    "latitude": 21.3069,
+    "longitude": -157.8583,
+    "utc_offset": -10
+  },
+  {
+    "rank": 70,
+    "name": "Roanoke\u2013Lynchburg",
+    "latitude": 37.2709,
+    "longitude": -79.9414,
+    "utc_offset": -5
+  },
+  {
+    "rank": 71,
+    "name": "Wichita\u2013Hutchinson",
+    "latitude": 37.6872,
+    "longitude": -97.3301,
+    "utc_offset": -6
+  },
+  {
+    "rank": 72,
+    "name": "Flint\u2013Saginaw\u2013Bay City",
+    "latitude": 43.0125,
+    "longitude": -83.6875,
+    "utc_offset": -5
+  },
+  {
+    "rank": 73,
+    "name": "Omaha",
+    "latitude": 41.2565,
+    "longitude": -95.9345,
+    "utc_offset": -6
+  },
+  {
+    "rank": 74,
+    "name": "Springfield, MO",
+    "latitude": 37.2089,
+    "longitude": -93.2923,
+    "utc_offset": -6
+  },
+  {
+    "rank": 75,
+    "name": "Huntsville\u2013Decatur (Florence)",
+    "latitude": 34.7304,
+    "longitude": -86.5861,
+    "utc_offset": -6
+  },
+  {
+    "rank": 76,
+    "name": "Columbia, SC",
+    "latitude": 34.0007,
+    "longitude": -81.0348,
+    "utc_offset": -5
+  },
+  {
+    "rank": 77,
+    "name": "Madison",
+    "latitude": 43.0731,
+    "longitude": -89.4012,
+    "utc_offset": -6
+  },
+  {
+    "rank": 78,
+    "name": "Portland\u2013Auburn",
+    "latitude": 43.6591,
+    "longitude": -70.2568,
+    "utc_offset": -5
+  },
+  {
+    "rank": 79,
+    "name": "Rochester, NY",
+    "latitude": 43.1566,
+    "longitude": -77.6088,
+    "utc_offset": -5
+  },
+  {
+    "rank": 80,
+    "name": "Harlingen\u2013Weslaco\u2013Brownsville\u2013McAllen",
+    "latitude": 26.2034,
+    "longitude": -98.23,
+    "utc_offset": -6
+  },
+  {
+    "rank": 81,
+    "name": "Toledo",
+    "latitude": 41.6639,
+    "longitude": -83.5552,
+    "utc_offset": -5
+  },
+  {
+    "rank": 82,
+    "name": "Charleston\u2013Huntington",
+    "latitude": 38.3498,
+    "longitude": -81.6326,
+    "utc_offset": -5
+  },
+  {
+    "rank": 83,
+    "name": "Waco\u2013Temple\u2013Bryan",
+    "latitude": 31.5493,
+    "longitude": -97.1467,
+    "utc_offset": -6
+  },
+  {
+    "rank": 84,
+    "name": "Savannah",
+    "latitude": 32.0809,
+    "longitude": -81.0912,
+    "utc_offset": -5
+  },
+  {
+    "rank": 85,
+    "name": "Charleston, SC",
+    "latitude": 32.7765,
+    "longitude": -79.9311,
+    "utc_offset": -5
+  },
+  {
+    "rank": 86,
+    "name": "Chattanooga",
+    "latitude": 35.0456,
+    "longitude": -85.3097,
+    "utc_offset": -5
+  },
+  {
+    "rank": 87,
+    "name": "Colorado Springs\u2013Pueblo",
+    "latitude": 38.8339,
+    "longitude": -104.8214,
+    "utc_offset": -7
+  },
+  {
+    "rank": 88,
+    "name": "Syracuse",
+    "latitude": 43.0481,
+    "longitude": -76.1474,
+    "utc_offset": -5
+  },
+  {
+    "rank": 89,
+    "name": "El Paso (Las Cruces)",
+    "latitude": 31.7619,
+    "longitude": -106.485,
+    "utc_offset": -7
+  },
+  {
+    "rank": 90,
+    "name": "Paducah\u2013Cape Girardeau\u2013Harrisburg",
+    "latitude": 37.0834,
+    "longitude": -88.6,
+    "utc_offset": -6
+  },
+  {
+    "rank": 91,
+    "name": "Shreveport\u2013Texarkana",
+    "latitude": 32.5252,
+    "longitude": -93.7502,
+    "utc_offset": -6
+  },
+  {
+    "rank": 92,
+    "name": "Champaign\u2013Urbana\u2013Springfield\u2013Decatur",
+    "latitude": 40.1164,
+    "longitude": -88.2434,
+    "utc_offset": -6
+  },
+  {
+    "rank": 93,
+    "name": "Burlington\u2013Plattsburgh",
+    "latitude": 44.4759,
+    "longitude": -73.2121,
+    "utc_offset": -5
+  },
+  {
+    "rank": 94,
+    "name": "Cedar Rapids\u2013Waterloo\u2013Iowa City\u2013Dubuque",
+    "latitude": 41.9779,
+    "longitude": -91.6656,
+    "utc_offset": -6
+  },
+  {
+    "rank": 95,
+    "name": "Baton Rouge",
+    "latitude": 30.4515,
+    "longitude": -91.1871,
+    "utc_offset": -6
+  },
+  {
+    "rank": 96,
+    "name": "Fort Smith\u2013Fayetteville\u2013Springdale\u2013Rogers",
+    "latitude": 36.0822,
+    "longitude": -94.1719,
+    "utc_offset": -6
+  },
+  {
+    "rank": 97,
+    "name": "Myrtle Beach\u2013Florence",
+    "latitude": 33.689,
+    "longitude": -78.8867,
+    "utc_offset": -5
+  },
+  {
+    "rank": 98,
+    "name": "Boise",
+    "latitude": 43.615,
+    "longitude": -116.2023,
+    "utc_offset": -7
+  },
+  {
+    "rank": 99,
+    "name": "Jackson, MS",
+    "latitude": 32.2988,
+    "longitude": -90.1848,
+    "utc_offset": -6
+  },
+  {
+    "rank": 100,
+    "name": "South Bend\u2013Elkhart",
+    "latitude": 41.6764,
+    "longitude": -86.252,
+    "utc_offset": -5
+  },
+  {
+    "rank": 101,
+    "name": "Tri\u2011Cities, TN\u2013VA",
+    "latitude": 36.4,
+    "longitude": -82.3,
+    "utc_offset": -5
+  },
+  {
+    "rank": 102,
+    "name": "Greenville\u2013New Bern\u2013Washington",
+    "latitude": 35.61,
+    "longitude": -77.37,
+    "utc_offset": -5
+  },
+  {
+    "rank": 103,
+    "name": "Reno",
+    "latitude": 39.5296,
+    "longitude": -119.813,
+    "utc_offset": -8
+  },
+  {
+    "rank": 104,
+    "name": "Davenport\u2013Rock Island\u2013Moline",
+    "latitude": 41.5236,
+    "longitude": -90.5776,
+    "utc_offset": -6
+  },
+  {
+    "rank": 105,
+    "name": "Tallahassee\u2013Thomasville",
+    "latitude": 30.4383,
+    "longitude": -84.2807,
+    "utc_offset": -5
+  },
+  {
+    "rank": 106,
+    "name": "Tyler\u2013Longview (Lufkin\u2013Nacogdoches)",
+    "latitude": 32.3513,
+    "longitude": -95.3011,
+    "utc_offset": -6
+  },
+  {
+    "rank": 107,
+    "name": "Lincoln\u2013Hastings\u2013Kearney",
+    "latitude": 40.8136,
+    "longitude": -96.7026,
+    "utc_offset": -6
+  },
+  {
+    "rank": 108,
+    "name": "Augusta\u2013Aiken",
+    "latitude": 33.4735,
+    "longitude": -82.0105,
+    "utc_offset": -5
+  },
+  {
+    "rank": 109,
+    "name": "Evansville",
+    "latitude": 37.9716,
+    "longitude": -87.5711,
+    "utc_offset": -6
+  },
+  {
+    "rank": 110,
+    "name": "Fort Wayne",
+    "latitude": 41.0793,
+    "longitude": -85.1394,
+    "utc_offset": -5
+  },
+  {
+    "rank": 111,
+    "name": "Sioux Falls (Mitchell)",
+    "latitude": 43.5446,
+    "longitude": -96.7311,
+    "utc_offset": -6
+  },
+  {
+    "rank": 112,
+    "name": "Johnstown\u2013Altoona\u2013State College",
+    "latitude": 40.3279,
+    "longitude": -78.9234,
+    "utc_offset": -5
+  },
+  {
+    "rank": 113,
+    "name": "Fargo\u2013Valley City",
+    "latitude": 46.8772,
+    "longitude": -96.7898,
+    "utc_offset": -6
+  },
+  {
+    "rank": 114,
+    "name": "Yakima\u2013Pasco\u2013Richland\u2013Kennewick",
+    "latitude": 46.6021,
+    "longitude": -120.5059,
+    "utc_offset": -8
+  },
+  {
+    "rank": 115,
+    "name": "Springfield\u2013Holyoke",
+    "latitude": 42.1015,
+    "longitude": -72.5898,
+    "utc_offset": -5
+  },
+  {
+    "rank": 116,
+    "name": "Traverse City\u2013Cadillac",
+    "latitude": 44.7631,
+    "longitude": -85.6206,
+    "utc_offset": -5
+  },
+  {
+    "rank": 117,
+    "name": "Lansing",
+    "latitude": 42.7325,
+    "longitude": -84.5555,
+    "utc_offset": -5
+  },
+  {
+    "rank": 118,
+    "name": "Youngstown",
+    "latitude": 41.0998,
+    "longitude": -80.6495,
+    "utc_offset": -5
+  },
+  {
+    "rank": 119,
+    "name": "Macon",
+    "latitude": 32.8407,
+    "longitude": -83.6324,
+    "utc_offset": -5
+  },
+  {
+    "rank": 120,
+    "name": "Eugene",
+    "latitude": 44.0521,
+    "longitude": -123.0868,
+    "utc_offset": -8
+  },
+  {
+    "rank": 121,
+    "name": "Montgomery\u2013Selma",
+    "latitude": 32.3668,
+    "longitude": -86.3,
+    "utc_offset": -6
+  },
+  {
+    "rank": 122,
+    "name": "Peoria\u2013Bloomington",
+    "latitude": 40.6936,
+    "longitude": -89.589,
+    "utc_offset": -6
+  },
+  {
+    "rank": 123,
+    "name": "Santa Barbara\u2013Santa Maria\u2013San Luis Obispo",
+    "latitude": 34.4208,
+    "longitude": -119.6982,
+    "utc_offset": -8
+  },
+  {
+    "rank": 124,
+    "name": "Lafayette, LA",
+    "latitude": 30.2241,
+    "longitude": -92.0198,
+    "utc_offset": -6
+  },
+  {
+    "rank": 125,
+    "name": "Bakersfield",
+    "latitude": 35.3733,
+    "longitude": -119.0187,
+    "utc_offset": -8
+  },
+  {
+    "rank": 126,
+    "name": "Wilmington, NC",
+    "latitude": 34.2257,
+    "longitude": -77.9447,
+    "utc_offset": -5
+  },
+  {
+    "rank": 127,
+    "name": "Columbus, GA",
+    "latitude": 32.4609,
+    "longitude": -84.9877,
+    "utc_offset": -5
+  },
+  {
+    "rank": 128,
+    "name": "Monterey\u2013Salinas",
+    "latitude": 36.6002,
+    "longitude": -121.8947,
+    "utc_offset": -8
+  },
+  {
+    "rank": 129,
+    "name": "La Crosse\u2013Eau Claire",
+    "latitude": 43.8014,
+    "longitude": -91.2396,
+    "utc_offset": -6
+  },
+  {
+    "rank": 130,
+    "name": "Corpus Christi",
+    "latitude": 27.8006,
+    "longitude": -97.3964,
+    "utc_offset": -6
+  },
+  {
+    "rank": 131,
+    "name": "Salisbury",
+    "latitude": 38.3655,
+    "longitude": -75.5939,
+    "utc_offset": -5
+  },
+  {
+    "rank": 132,
+    "name": "Amarillo",
+    "latitude": 35.221,
+    "longitude": -101.8313,
+    "utc_offset": -6
+  },
+  {
+    "rank": 133,
+    "name": "Wausau\u2013Rhinelander",
+    "latitude": 44.9592,
+    "longitude": -89.6301,
+    "utc_offset": -6
+  },
+  {
+    "rank": 134,
+    "name": "Columbus\u2013Tupelo\u2013West Point\u2013Starkville",
+    "latitude": 33.4951,
+    "longitude": -88.4273,
+    "utc_offset": -6
+  },
+  {
+    "rank": 135,
+    "name": "Columbia\u2013Jefferson City",
+    "latitude": 38.9517,
+    "longitude": -92.3341,
+    "utc_offset": -6
+  },
+  {
+    "rank": 136,
+    "name": "Chico\u2013Redding",
+    "latitude": 39.7285,
+    "longitude": -121.8375,
+    "utc_offset": -8
+  },
+  {
+    "rank": 137,
+    "name": "Rockford",
+    "latitude": 42.2711,
+    "longitude": -89.094,
+    "utc_offset": -6
+  },
+  {
+    "rank": 138,
+    "name": "Duluth\u2013Superior",
+    "latitude": 46.7867,
+    "longitude": -92.1005,
+    "utc_offset": -6
+  },
+  {
+    "rank": 139,
+    "name": "Medford\u2013Klamath Falls",
+    "latitude": 42.3265,
+    "longitude": -122.8756,
+    "utc_offset": -8
+  },
+  {
+    "rank": 140,
+    "name": "Lubbock",
+    "latitude": 33.5779,
+    "longitude": -101.8552,
+    "utc_offset": -6
+  },
+  {
+    "rank": 141,
+    "name": "Topeka",
+    "latitude": 39.0473,
+    "longitude": -95.6752,
+    "utc_offset": -6
+  },
+  {
+    "rank": 142,
+    "name": "Monroe\u2013El Dorado",
+    "latitude": 35.0095,
+    "longitude": -91.8725,
+    "utc_offset": -6
+  },
+  {
+    "rank": 143,
+    "name": "Beaumont\u2013Port Arthur",
+    "latitude": 30.0802,
+    "longitude": -94.1275,
+    "utc_offset": -6
+  },
+  {
+    "rank": 144,
+    "name": "Odessa\u2013Midland",
+    "latitude": 31.8457,
+    "longitude": -102.3676,
+    "utc_offset": -6
+  },
+  {
+    "rank": 145,
+    "name": "Palm Springs",
+    "latitude": 33.8303,
+    "longitude": -116.5453,
+    "utc_offset": -8
+  },
+  {
+    "rank": 146,
+    "name": "Anchorage",
+    "latitude": 61.2181,
+    "longitude": -149.9003,
+    "utc_offset": -9
+  },
+  {
+    "rank": 147,
+    "name": "Minot\u2013Bismarck\u2013Dickinson (Williston)",
+    "latitude": 46.8083,
+    "longitude": -100.7837,
+    "utc_offset": -6
+  },
+  {
+    "rank": 148,
+    "name": "Panama City",
+    "latitude": 30.1588,
+    "longitude": -85.6602,
+    "utc_offset": -6
+  },
+  {
+    "rank": 149,
+    "name": "Sioux City",
+    "latitude": 42.4999,
+    "longitude": -96.4003,
+    "utc_offset": -6
+  },
+  {
+    "rank": 150,
+    "name": "Wichita Falls\u2013Lawton",
+    "latitude": 33.9137,
+    "longitude": -98.4934,
+    "utc_offset": -6
+  },
+  {
+    "rank": 151,
+    "name": "Joplin\u2013Pittsburg",
+    "latitude": 37.0842,
+    "longitude": -94.5133,
+    "utc_offset": -6
+  },
+  {
+    "rank": 152,
+    "name": "Albany, GA",
+    "latitude": 31.5785,
+    "longitude": -84.1557,
+    "utc_offset": -5
+  },
+  {
+    "rank": 153,
+    "name": "Rochester\u2013Mason City\u2013Austin",
+    "latitude": 44.0121,
+    "longitude": -92.4802,
+    "utc_offset": -6
+  },
+  {
+    "rank": 154,
+    "name": "Erie",
+    "latitude": 42.1292,
+    "longitude": -80.0851,
+    "utc_offset": -5
+  },
+  {
+    "rank": 155,
+    "name": "Idaho Falls\u2013Pocatello (Jackson)",
+    "latitude": 43.4917,
+    "longitude": -112.0326,
+    "utc_offset": -7
+  },
+  {
+    "rank": 156,
+    "name": "Bangor",
+    "latitude": 44.8012,
+    "longitude": -68.7778,
+    "utc_offset": -5
+  },
+  {
+    "rank": 157,
+    "name": "Gainesville",
+    "latitude": 29.6516,
+    "longitude": -82.3248,
+    "utc_offset": -5
+  },
+  {
+    "rank": 158,
+    "name": "Biloxi\u2013Gulfport",
+    "latitude": 30.396,
+    "longitude": -88.8853,
+    "utc_offset": -6
+  },
+  {
+    "rank": 159,
+    "name": "Terre Haute",
+    "latitude": 39.4667,
+    "longitude": -87.4139,
+    "utc_offset": -5
+  },
+  {
+    "rank": 160,
+    "name": "Sherman\u2013Ada",
+    "latitude": 33.6357,
+    "longitude": -96.6089,
+    "utc_offset": -6
+  },
+  {
+    "rank": 161,
+    "name": "Missoula",
+    "latitude": 46.8721,
+    "longitude": -113.994,
+    "utc_offset": -7
+  },
+  {
+    "rank": 162,
+    "name": "Binghamton",
+    "latitude": 42.0987,
+    "longitude": -75.9179,
+    "utc_offset": -5
+  },
+  {
+    "rank": 163,
+    "name": "Wheeling\u2013Steubenville",
+    "latitude": 40.0639,
+    "longitude": -80.7209,
+    "utc_offset": -5
+  },
+  {
+    "rank": 164,
+    "name": "Yuma\u2013El Centro",
+    "latitude": 32.6927,
+    "longitude": -114.6277,
+    "utc_offset": -7
+  },
+  {
+    "rank": 165,
+    "name": "Billings",
+    "latitude": 45.7833,
+    "longitude": -108.5007,
+    "utc_offset": -7
+  },
+  {
+    "rank": 166,
+    "name": "Abilene\u2013Sweetwater",
+    "latitude": 32.4487,
+    "longitude": -99.7331,
+    "utc_offset": -6
+  },
+  {
+    "rank": 167,
+    "name": "Bluefield\u2013Beckley\u2013Oak Hill",
+    "latitude": 37.2707,
+    "longitude": -81.2185,
+    "utc_offset": -5
+  },
+  {
+    "rank": 168,
+    "name": "Hattiesburg\u2013Laurel",
+    "latitude": 31.3271,
+    "longitude": -89.2903,
+    "utc_offset": -6
+  },
+  {
+    "rank": 169,
+    "name": "Rapid City",
+    "latitude": 44.0805,
+    "longitude": -103.231,
+    "utc_offset": -7
+  },
+  {
+    "rank": 170,
+    "name": "Dothan",
+    "latitude": 31.2232,
+    "longitude": -85.3905,
+    "utc_offset": -6
+  },
+  {
+    "rank": 171,
+    "name": "Utica",
+    "latitude": 43.1009,
+    "longitude": -75.2327,
+    "utc_offset": -5
+  },
+  {
+    "rank": 172,
+    "name": "Clarksburg\u2013Weston",
+    "latitude": 39.2823,
+    "longitude": -80.3556,
+    "utc_offset": -5
+  },
+  {
+    "rank": 173,
+    "name": "Harrisonburg",
+    "latitude": 38.4496,
+    "longitude": -78.8689,
+    "utc_offset": -5
+  },
+  {
+    "rank": 174,
+    "name": "Jackson, TN",
+    "latitude": 35.6145,
+    "longitude": -88.8139,
+    "utc_offset": -6
+  },
+  {
+    "rank": 175,
+    "name": "Quincy\u2013Hannibal\u2013Keokuk",
+    "latitude": 39.9356,
+    "longitude": -91.4099,
+    "utc_offset": -6
+  },
+  {
+    "rank": 176,
+    "name": "Charlottesville",
+    "latitude": 38.0293,
+    "longitude": -78.4767,
+    "utc_offset": -5
+  },
+  {
+    "rank": 177,
+    "name": "Lake Charles",
+    "latitude": 30.2266,
+    "longitude": -93.2174,
+    "utc_offset": -6
+  },
+  {
+    "rank": 178,
+    "name": "Elmira (Corning)",
+    "latitude": 42.0898,
+    "longitude": -76.8077,
+    "utc_offset": -5
+  },
+  {
+    "rank": 179,
+    "name": "Watertown",
+    "latitude": 43.9748,
+    "longitude": -76.0211,
+    "utc_offset": -5
+  },
+  {
+    "rank": 180,
+    "name": "Bowling Green",
+    "latitude": 36.9685,
+    "longitude": -86.4808,
+    "utc_offset": -6
+  },
+  {
+    "rank": 181,
+    "name": "Marquette",
+    "latitude": 46.5436,
+    "longitude": -87.3955,
+    "utc_offset": -5
+  },
+  {
+    "rank": 182,
+    "name": "Jonesboro",
+    "latitude": 35.8423,
+    "longitude": -90.7043,
+    "utc_offset": -6
+  },
+  {
+    "rank": 183,
+    "name": "Alexandria, LA",
+    "latitude": 31.3113,
+    "longitude": -92.4451,
+    "utc_offset": -6
+  },
+  {
+    "rank": 184,
+    "name": "Laredo",
+    "latitude": 27.5064,
+    "longitude": -99.5075,
+    "utc_offset": -6
+  },
+  {
+    "rank": 185,
+    "name": "Butte\u2013Bozeman",
+    "latitude": 45.7833,
+    "longitude": -112.027,
+    "utc_offset": -7
+  },
+  {
+    "rank": 186,
+    "name": "Bend, OR",
+    "latitude": 44.0582,
+    "longitude": -121.3153,
+    "utc_offset": -8
+  },
+  {
+    "rank": 187,
+    "name": "Grand Junction\u2013Montrose",
+    "latitude": 39.0639,
+    "longitude": -108.5506,
+    "utc_offset": -7
+  },
+  {
+    "rank": 188,
+    "name": "Twin Falls",
+    "latitude": 42.5629,
+    "longitude": -114.4609,
+    "utc_offset": -7
+  },
+  {
+    "rank": 189,
+    "name": "Lafayette, IN",
+    "latitude": 40.4167,
+    "longitude": -86.8753,
+    "utc_offset": -5
+  },
+  {
+    "rank": 190,
+    "name": "Lima",
+    "latitude": 40.742,
+    "longitude": -84.1052,
+    "utc_offset": -5
+  },
+  {
+    "rank": 191,
+    "name": "Great Falls",
+    "latitude": 47.5045,
+    "longitude": -111.285,
+    "utc_offset": -7
+  },
+  {
+    "rank": 192,
+    "name": "Meridian",
+    "latitude": 32.3643,
+    "longitude": -88.7037,
+    "utc_offset": -6
+  },
+  {
+    "rank": 193,
+    "name": "Cheyenne\u2013Scottsbluff",
+    "latitude": 41.1399,
+    "longitude": -104.8202,
+    "utc_offset": -7
+  },
+  {
+    "rank": 194,
+    "name": "Parkersburg",
+    "latitude": 39.2668,
+    "longitude": -81.5615,
+    "utc_offset": -5
+  },
+  {
+    "rank": 195,
+    "name": "Greenwood\u2013Greenville",
+    "latitude": 34.2079,
+    "longitude": -82.1618,
+    "utc_offset": -5
+  },
+  {
+    "rank": 196,
+    "name": "Eureka",
+    "latitude": 40.8021,
+    "longitude": -124.1637,
+    "utc_offset": -8
+  },
+  {
+    "rank": 197,
+    "name": "San Angelo",
+    "latitude": 31.4638,
+    "longitude": -100.437,
+    "utc_offset": -6
+  },
+  {
+    "rank": 198,
+    "name": "Casper\u2013Riverton",
+    "latitude": 42.8666,
+    "longitude": -106.3131,
+    "utc_offset": -7
+  },
+  {
+    "rank": 199,
+    "name": "Mankato",
+    "latitude": 44.1636,
+    "longitude": -93.9994,
+    "utc_offset": -6
+  },
+  {
+    "rank": 200,
+    "name": "Ottumwa\u2013Kirksville",
+    "latitude": 41.0122,
+    "longitude": -92.4505,
+    "utc_offset": -6
+  },
+  {
+    "rank": 201,
+    "name": "St. Joseph",
+    "latitude": 39.7684,
+    "longitude": -94.8467,
+    "utc_offset": -6
+  },
+  {
+    "rank": 202,
+    "name": "Fairbanks",
+    "latitude": 64.8378,
+    "longitude": -147.7164,
+    "utc_offset": -9
+  },
+  {
+    "rank": 203,
+    "name": "Zanesville",
+    "latitude": 39.9406,
+    "longitude": -81.894,
+    "utc_offset": -5
+  },
+  {
+    "rank": 204,
+    "name": "Victoria",
+    "latitude": 28.8053,
+    "longitude": -97.0036,
+    "utc_offset": -6
+  },
+  {
+    "rank": 205,
+    "name": "Helena",
+    "latitude": 46.5884,
+    "longitude": -112.0245,
+    "utc_offset": -7
+  },
+  {
+    "rank": 206,
+    "name": "Presque Isle",
+    "latitude": 46.6795,
+    "longitude": -68.0016,
+    "utc_offset": -5
+  },
+  {
+    "rank": 207,
+    "name": "Juneau",
+    "latitude": 58.3019,
+    "longitude": -134.4197,
+    "utc_offset": -9
+  },
+  {
+    "rank": 208,
+    "name": "Alpena",
+    "latitude": 45.067,
+    "longitude": -83.432,
+    "utc_offset": -5
+  },
+  {
+    "rank": 209,
+    "name": "North Platte",
+    "latitude": 41.1403,
+    "longitude": -100.76,
+    "utc_offset": -7
+  },
+  {
+    "rank": 210,
+    "name": "Glendive",
+    "latitude": 47.1059,
+    "longitude": -104.7125,
+    "utc_offset": -7
+  }
+]

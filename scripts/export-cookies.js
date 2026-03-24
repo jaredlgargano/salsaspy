@@ -121,6 +121,15 @@ async function main() {
     }
 
     console.log(`\n✨ Finished. Total active accounts in pool: ${accounts.filter(a => a.cookies && !a.banned).length}\n`);
+
+    // --- Sync with Remote API ---
+    console.log('🔄 Triggering remote sync via check-cookies.js...');
+    try {
+        const { execSync } = require('child_process');
+        execSync('node scripts/check-cookies.js', { stdio: 'inherit' });
+    } catch (err) {
+        console.error('⚠️ Remote sync failed after export. You may need to run "npm run check-cookies" manually.');
+    }
 }
 
 function getJwtExpiry(cookies) {
