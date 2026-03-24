@@ -493,11 +493,26 @@ export function setupRoutes(app: Hono<{ Bindings: ApiEnv }>) {
             if (existing) {
                 await c.env.DB.prepare(
                     `UPDATE runs SET ended_at = ?, status = ?, failure_reason = ?, metadata = ? WHERE run_id = ?`
-                ).bind(ended_at || null, status, failure_reason || null, metadata ? JSON.stringify(metadata) : null, run_id).run();
+                ).bind(
+                    ended_at || null, 
+                    status || 'UNKNOWN', 
+                    failure_reason || null, 
+                    metadata ? JSON.stringify(metadata) : null, 
+                    run_id
+                ).run();
             } else {
                 await c.env.DB.prepare(
                     `INSERT INTO runs (run_id, started_at, ended_at, shard, shards_total, status, failure_reason, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-                ).bind(run_id, started_at, ended_at || null, shard, shards_total, status, failure_reason || null, metadata ? JSON.stringify(metadata) : null).run();
+                ).bind(
+                    run_id, 
+                    started_at || new Date().toISOString(), 
+                    ended_at || null, 
+                    shard || 0, 
+                    shards_total || 1, 
+                    status || 'UNKNOWN', 
+                    failure_reason || null, 
+                    metadata ? JSON.stringify(metadata) : null
+                ).run();
             }
         }
 
@@ -520,14 +535,28 @@ export function setupRoutes(app: Hono<{ Bindings: ApiEnv }>) {
                         await recordUnknownBrand(c.env.DB, obs.merchant_name);
                     }
                     // Use a unique enough ID
-                    const obsId = `${obs.run_id}-${obs.market_id}-${obs.category}-${obs.rank}-${i + chunk.indexOf(obs)}-${Date.now()}`;
+                    const obsId = `${obs.run_id || 'no-run'}-${obs.market_id || 'no-market'}-${obs.category || 'none'}-${obs.rank || 0}-${i + chunk.indexOf(obs)}-${Date.now()}`;
                     batch.push(
                         insertStmt.bind(
-                            obsId, obs.run_id, obs.market_id, obs.observed_at, obs.category, obs.surface,
-                            obs.merchant_name, norm, obs.rank, obs.is_sponsored ? 1 : 0, obs.has_discount ? 1 : 0,
-                            obs.offer_title || null, obs.raw_snippet || null,
-                            obs.store_id || null, obs.discount_type || null, obs.delivery_fee || null,
-                            obs.rating || null, obs.review_count || null, obs.city || null
+                            obsId, 
+                            obs.run_id || null, 
+                            obs.market_id || null, 
+                            obs.observed_at || new Date().toISOString(), 
+                            obs.category || 'None', 
+                            obs.surface || 'searchCategory',
+                            obs.merchant_name || 'Unknown', 
+                            norm || 'Unknown', 
+                            obs.rank || 0, 
+                            obs.is_sponsored ? 1 : 0, 
+                            obs.has_discount ? 1 : 0,
+                            obs.offer_title || null, 
+                            obs.raw_snippet || null,
+                            obs.store_id || null, 
+                            obs.discount_type || null, 
+                            obs.delivery_fee || null,
+                            obs.rating || null, 
+                            obs.review_count || null, 
+                            obs.city || null
                         )
                     );
                 }

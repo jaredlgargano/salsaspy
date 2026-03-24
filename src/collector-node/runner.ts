@@ -72,9 +72,9 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                 const url = `https://www.doordash.com/${obj.path}?lat=${market.latitude}&lng=${market.longitude}`;
                 let success = false;
                 
-                // Tier Strategy: 3 Proxies -> 1 Direct -> 1 Guest
+                // Tier Strategy: 10 Free Proxies -> 1 Direct -> 1 Guest
                 const tiers = [
-                    { type: 'Proxy', useProxy: true, useCookies: true, retries: 3 },
+                    { type: 'Proxy', useProxy: true, useCookies: true, retries: 10 },
                     { type: 'Direct', useProxy: false, useCookies: true, retries: 1 },
                     { type: 'Guest', useProxy: false, useCookies: false, retries: 1 }
                 ];
@@ -87,16 +87,20 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                         const proxy = tier.useProxy ? (process.env.PROXY_URL || getRandomProxy()) : undefined;
                         
                         let context: BrowserContext;
+                        const MODERN_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+                        
+                        let proxyConfig: any = proxy ? { server: proxy } : undefined;
+                        
                         if (tier.type === 'Proxy') {
                             context = await browser.newContext({
-                                userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-                                proxy: proxy ? { server: proxy } : undefined,
+                                userAgent: MODERN_UA,
+                                proxy: proxyConfig,
                             });
                         } else if (tier.type === 'Direct') {
-                            if (!directContext) directContext = await browser.newContext({ userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36' });
+                            if (!directContext) directContext = await browser.newContext({ userAgent: MODERN_UA });
                             context = directContext;
                         } else {
-                            if (!guestContext) guestContext = await browser.newContext({ userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36' });
+                            if (!guestContext) guestContext = await browser.newContext({ userAgent: MODERN_UA });
                             context = guestContext;
                         }
 
@@ -115,9 +119,14 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                             }
 
                             const page = await context.newPage();
+                            // Block heavy assets to speed up navigation and prevent timeouts
+                            await page.route('**/*.{png,jpg,jpeg,gif,svg,webp,css,woff,woff2,ttf,otf}', route => route.abort());
+                            await page.route('**/google-analytics.com/**', route => route.abort());
+                            await page.route('**/doubleclick.net/**', route => route.abort());
+
                             console.log(`  -> [${obj.name}] Tier: ${tier.type} (Try ${r+1}/${tier.retries}) | Proxy: ${proxy ? 'YES' : 'NONE'}`);
 
-                            const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+                            const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
                             const status = response?.status() || 0;
 
                             if (status === 200) {
@@ -157,8 +166,14 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                             }
                             await page.close();
                         } catch (e: any) {
-                            console.log(`     💥 Error: ${e.message.split('\n')[0]}`);
-                            await new Promise(r => setTimeout(r, 2000));
+                            const errMsg = e.message.split('\n')[0];
+                            console.log(`     💥 Error: ${errMsg}`);
+                            if (errMsg.includes('net::ERR_CONNECTION_CLOSED') || errMsg.includes('net::ERR_PROXY_CONNECTION_FAILED')) {
+                                console.log(`     🔄 Connection closed/failed. Retrying with fresh proxy...`);
+                                await new Promise(r => setTimeout(r, 1000));
+                            } else {
+                                await new Promise(r => setTimeout(r, 2000));
+                            }
                         } finally {
                             if (tier.type === 'Proxy') await context.close().catch(() => {});
                         }
