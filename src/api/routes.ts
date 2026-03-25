@@ -249,31 +249,33 @@ export function setupRoutes(app: Hono<{ Bindings: ApiEnv }>) {
         return c.json({ brands: result.results?.map((r: any) => r.brand_normalized) || [] });
     });
 
-    // Aggregates Monthly
+    // Aggregates Monthly (Derived from Daily)
     app.get("/v1/aggregates/monthly", async (c) => {
-        const month = c.req.query("month");
+        const month = c.req.query("month"); // YYYY-MM
         if (!month) return c.json({ error: "Missing month parameter (YYYY-MM)" }, 400);
-
-        let query = `SELECT * FROM aggregates_monthly WHERE month = ?`;
-        const params: any[] = [month];
-
+        
         const category = c.req.query("category");
-        if (category) {
-            query += ` AND category = ?`;
-            params.push(category);
-        }
-
         const surface = c.req.query("surface");
-        if (surface) {
-            query += ` AND surface = ?`;
-            params.push(surface);
-        }
-
         const metric_name = c.req.query("metric_name");
-        if (metric_name) {
-            query += ` AND metric_name = ?`;
-            params.push(metric_name);
-        }
+
+        let query = `
+            SELECT 
+                strftime('%Y-%m', date) as month,
+                category,
+                brand_normalized,
+                AVG(avg_min_rank) as avg_min_rank,
+                AVG(sponsored_share) as sponsored_share,
+                AVG(discount_store_share) as discount_store_share,
+                SUM(total_observations) as total_observations
+            FROM aggregates_daily 
+            WHERE date LIKE ?
+        `;
+        const params: any[] = [`${month}%`];
+
+        if (category) { query += " AND category = ?"; params.push(category); }
+        if (surface) { query += " AND surface = ?"; params.push(surface); }
+        
+        query += " GROUP BY brand_normalized, category ORDER BY brand_normalized ASC";
 
         const result = await c.env.DB.prepare(query).bind(...params).all();
         return c.json({ aggregates: result.results || [] });
@@ -493,7 +495,7 @@ export function setupRoutes(app: Hono<{ Bindings: ApiEnv }>) {
         results.push(await c.env.DB.prepare("DELETE FROM observations WHERE market_id NOT LIKE 'dma-%'").run());
         results.push(await c.env.DB.prepare("DELETE FROM runs WHERE started_at < ?").bind(cutoff).run());
         results.push(await c.env.DB.prepare("DELETE FROM aggregates_daily WHERE date < ?").bind(cutoff.slice(0, 10)).run());
-        results.push(await c.env.DB.prepare("DELETE FROM aggregates_monthly WHERE month = strftime('%Y-%m', 'now')").run());
+        // results.push(await c.env.DB.prepare("DELETE FROM aggregates_monthly WHERE month = strftime('%Y-%m', 'now')").run()); // Table deprecated
         
         return c.json({ success: true, cleanup_results: results });
     });
