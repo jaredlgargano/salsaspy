@@ -544,6 +544,7 @@ export function setupRoutes(app: Hono<{ Bindings: ApiEnv }>) {
             `);
 
             // Use a for loop to chunk the observations into batches of 50
+            const unknownBrands = new Set<string>();
             const CHUNK_SIZE = 50;
             for (let i = 0; i < observations.length; i += CHUNK_SIZE) {
                 const chunk = observations.slice(i, i + CHUNK_SIZE);
@@ -551,9 +552,8 @@ export function setupRoutes(app: Hono<{ Bindings: ApiEnv }>) {
                 for (const obs of chunk) {
                     const norm = normalizeBrand(obs.merchant_name || "");
                     if (obs.merchant_name && !isKnownBrand(obs.merchant_name) && norm === obs.merchant_name) {
-                        await recordUnknownBrand(c.env.DB, obs.merchant_name);
+                        unknownBrands.add(obs.merchant_name);
                     }
-                    // Use a unique enough ID
                     const obsId = `${obs.run_id || 'no-run'}-${obs.market_id || 'no-market'}-${obs.category || 'none'}-${obs.rank || 0}-${i + chunk.indexOf(obs)}-${Date.now()}`;
                     batch.push(
                         insertStmt.bind(
@@ -581,6 +581,13 @@ export function setupRoutes(app: Hono<{ Bindings: ApiEnv }>) {
                 }
                 if (batch.length > 0) {
                     await c.env.DB.batch(batch);
+                }
+            }
+
+            // Record unknown brands efficiently after ingestion
+            if (unknownBrands.size > 0) {
+                for (const brand of unknownBrands) {
+                    c.executionCtx.waitUntil(recordUnknownBrand(c.env.DB, brand));
                 }
             }
 

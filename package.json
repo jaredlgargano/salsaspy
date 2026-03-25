@@ -12,7 +12,8 @@
     "export-cookies": "node scripts/export-cookies.js",
     "check-cookies": "node scripts/check-cookies.js",
     "refresh-cookies": "node scripts/refresh-cookies.js",
-    "push-secrets": "node scripts/push-secrets.js"
+    "push-secrets": "node scripts/push-secrets.js",
+    "qa-prod": "npx tsx scripts/qa-prod.ts"
   },
   "keywords": [],
   "author": "",

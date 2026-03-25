@@ -13,6 +13,7 @@ export interface ExtractedMerchant {
     rating: number | null;
     review_count: number | null;
     source?: string;
+    raw_badges?: any[];
 }
 
 export type ParseStatus = "SUCCESS" | "BLOCKED" | "JS_REQUIRED" | "PARSE_SCHEMA_CHANGED";
@@ -23,52 +24,75 @@ export interface ParseResult {
 }
 
 export function parseListings(html: string): ParseResult {
-    if (html.includes("cf-browser-verification") || html.includes("px-captcha") || html.includes("Pardon Our Interruption") || html.includes("Access Denied")) {
+    if (!html || html.length < 200) return { status: "PARSE_SCHEMA_CHANGED", merchants: [] };
+
+    const lower = html.toLowerCase();
+    if (html.includes("cf-browser-verification") || html.includes("px-captcha") || 
+        lower.includes("pardon our interruption") || lower.includes("access denied") || 
+        lower.includes("just a moment") || lower.includes("enable cookies") || 
+        lower.includes("checking your browser")) {
         return { status: "BLOCKED", merchants: [] };
     }
 
-    if (html.includes("You need to enable JavaScript to run this app.") || html.length < 5000) {
+    const isRawRsc = !html.includes('<html') && (html.match(/^[0-9]+:/) || html.includes('"$Sreact.fragment"') || html.includes('__typename'));
+    
+    if (!isRawRsc && (html.includes("You need to enable JavaScript to run this app.") || html.length < 4000)) {
         return { status: "JS_REQUIRED", merchants: [] };
     }
 
-    const $ = cheerio.load(html);
-    let rank = 1;
     const merchantMap = new Map<string, ExtractedMerchant>();
+    let rank = 1;
+    let rscCounter = 0;
 
     // Centralized Metadata Extraction Logic
-    function getMetadata(item: any, customData: any = {}) {
+    function getMetadata(item: any, customParams: any = {}) {
         const itemStr = JSON.stringify(item).toLowerCase();
-        const promo_title = String(item.promotion_title || item.promotionTitle || customData.promotion_title || customData.promotionTitle || item.subtitle || item.accessory_text || item.description || customData.subtitle || item.offer_title || "").toLowerCase();
         
-        // MULTI-SIGNAL AD DETECTION (PHASE 3)
-        const is_sponsored = !!(
+        const promo_title = String(item.promotion_title || item.promotionTitle || customParams.promotion_title || customParams.promotionTitle || item.subtitle || item.accessory_text || item.description || customParams.subtitle || item.offer_title || "").toLowerCase();
+        
+        const offers = item.offers || item.promotions || customParams.offers || [];
+        const badges = item.badges || customParams.badges || [];
+        const card_position = typeof item.card_position === 'number' ? item.card_position : (typeof customParams.card_position === 'number' ? customParams.card_position : 999);
+
+        // High-confidence signals (explicit fields)
+        const hasExplicitAdField = !!(
             item.is_sponsored || item.isSponsored || item.ad_id || item.isAd || item.is_promoted || item.sponsored || 
-            customData.is_sponsored || customData.isSponsored || customData.ad_id || 
-            (item.logging && (item.logging.includes('ad_id') || item.logging.includes('adId'))) ||
-            (item.source === 'dom' && (itemStr.includes('sponsored') || itemStr.includes(' ad '))) ||
-            // Signal 2: Semantic Aria / Text Badge (Common in Production RSC)
-            itemStr.includes('\"sponsored\"') || itemStr.includes('\"ad\"') || itemStr.includes('aria-label\":\"sponsored') ||
-            // Signal 3: Position Metadata (First 2 are usually ads if they have a non-standard rank field)
-            (item.card_position < 2 && item.source !== 'dom')
+            customParams.is_sponsored || customParams.isSponsored || customParams.ad_id || 
+            (item.logging && String(JSON.stringify(item.logging)).includes('ad_id'))
         );
 
-        const offers = item.offers || item.promotions || customData.offers || [];
+        // Broad semantic signals (text and aria)
+        const hasAdSemantic = (
+            /("sponsored"|"ad"|"promoted"|aria-label":"sponsored)/i.test(itemStr) ||
+            /("text":"(ad|sponsored|promoted)")/i.test(itemStr) ||
+            (Array.isArray(badges) && badges.some((b: any) => {
+                const bText = String(b.text || "").toLowerCase();
+                return bText === 'ad' || bText === 'sponsored' || bText === 'promoted';
+            }))
+        );
+
+        const is_sponsored = hasExplicitAdField || hasAdSemantic || (card_position < 2 && item.source !== 'dom' && item.__typename === 'Store');
+
         const has_discount = !!(
-            item.has_discount || item.hasDiscount || customData.has_discount || customData.hasDiscount || 
+            item.has_discount || item.hasDiscount || customParams.has_discount || customParams.hasDiscount || 
             (Array.isArray(offers) && offers.length > 0) ||
+            (Array.isArray(badges) && badges.some((b: any) => {
+                const bText = String(b.text || "").toLowerCase();
+                return bText.includes('off') || bText.includes('save') || bText.includes('promo') || bText.includes('deal');
+            })) ||
             promo_title.includes('off') || promo_title.includes('save') || promo_title.includes('$0') || 
             promo_title.includes('free') || promo_title.includes('promo') || promo_title.includes('reduced') ||
             itemStr.includes('off on $') || itemStr.includes('save $')
         );
 
-        const rating = item.star_rating || item.rating || item.average_rating || customData.rating?.average_rating || customData.rating || null;
-        const reviewCount = item.num_star_rating || item.review_count || item.ratings_count || customData.rating?.display_num_ratings || null;
+        const rating = item.star_rating || item.rating || item.average_rating || customParams.rating?.average_rating || customParams.rating || null;
+        const reviewCount = item.num_star_rating || item.review_count || item.ratings_count || customParams.rating?.display_num_ratings || null;
         
-        return { is_sponsored, has_discount, rating, reviewCount, promo_title, offers };
+        return { is_sponsored, has_discount, rating, reviewCount, promo_title, offers, badges };
     }
 
     // Helper to merge or add merchant
-    function addMerchantFromData(item: any) {
+    function addMerchantFromData(item: any, customParams: any = {}) {
         if (!item || typeof item !== 'object') return;
         
         let customData: any = {};
@@ -76,85 +100,76 @@ export function parseListings(html: string): ParseResult {
             try { customData = JSON.parse(item.custom); } catch (e) {}
         }
 
-        let store_id = String(item.store_id || item.business_id || item.id || item.id_str || customData.store_id || '');
-        if (store_id.startsWith('row.store:')) store_id = store_id.split(':')[1];
-        else if (store_id.includes('-')) {
-            const match = store_id.match(/-([0-9]+)$/);
-            if (match) store_id = match[1];
-        }
-        
-        if (!store_id || store_id === 'undefined' || store_id === 'null' || store_id === '') return;
-
-        const { is_sponsored, has_discount, rating, reviewCount, promo_title, offers } = getMetadata(item, customData);
-        const availability = item.is_currently_available || customData.is_currently_available;
-        const firstOffer = Array.isArray(offers) && offers.length > 0 ? (offers[0].title || offers[0].text) : null;
-        const finalOffer = item.offer_title || (promo_title.length > 3 ? promo_title : null) || firstOffer;
+        const meta = getMetadata(item, { ...customData, ...customParams });
+        let store_id = String(item.store_id || item.business_id || item.id || item.id_str || customData.store_id || customParams.store_id || '');
+        if (!store_id || store_id === "undefined") return;
 
         if (merchantMap.has(store_id)) {
             const existing = merchantMap.get(store_id)!;
-            if (is_sponsored) existing.is_sponsored = true;
-            if (has_discount) existing.has_discount = true;
-            if (!existing.offer_title && finalOffer) existing.offer_title = String(finalOffer);
-            if (!existing.rating && rating) existing.rating = Number(rating);
-            if (!existing.review_count && reviewCount) existing.review_count = Number(reviewCount);
-            
-            const nameCandidate = item.store_name || item.merchant_name || item.name || customData.store_name || "";
-            if (nameCandidate && nameCandidate.length > existing.merchant_name.length && !nameCandidate.toLowerCase().includes('sticks') && !nameCandidate.toLowerCase().includes('bread')) {
-                existing.merchant_name = String(nameCandidate);
-            }
+            if (meta.is_sponsored) existing.is_sponsored = true;
+            if (meta.has_discount) existing.has_discount = true;
+            if (meta.promo_title && !existing.offer_title) existing.offer_title = meta.promo_title;
+            if (meta.rating && !existing.rating) existing.rating = Number(meta.rating);
+            if (meta.reviewCount && !existing.review_count) existing.review_count = Number(meta.reviewCount);
             return;
         }
-
-        // Temporarily disabled filter for debugging
-        /*
-        if (!hasRating && !isTrustedSource && !is_sponsored) {
-            return;
-        }
-        */
-
-        const name = item.store_name || item.merchant_name || item.name || item.business_name || item.title || item.text?.title;
-        if (!name || String(name).toLowerCase().includes('doordash')) return;
-        
-        const lowerName = name.toLowerCase();
-        if (['all', 'alcohol', 'grocery', 'restaurant', 'deals', 'convenience'].includes(lowerName)) return;
-        const isItemName = lowerName.includes(' inch') || lowerName.includes(' pizza') || lowerName.includes(' bread') || 
-                           lowerName.includes(' salad') || lowerName.includes(' wings') || lowerName.includes(' slice') ||
-                           lowerName.includes(' sticks') || lowerName.includes(' bites') || lowerName.includes(' side');
-        if (isItemName) return;
-
-        const isSecureStore = (rating !== null) || (reviewCount !== null) || (availability !== undefined) || 
-                             item.__typename === 'Store' || item.source === 'dom' || item.source === 'regex' ||
-                             is_sponsored || has_discount;
-        
-        if (!isSecureStore) return;
 
         merchantMap.set(store_id, {
-            merchant_name: String(name).replace(/\\u0026/g, '&'),
-            rank: rank++,
-            is_sponsored,
-            has_discount,
-            offer_title: finalOffer ? String(finalOffer).replace(/\\u0026/g, '&') : null,
-            raw_snippet: JSON.stringify(item).substring(0, 300),
-            store_id: store_id,
-            discount_type: item.discount_type || (has_discount ? "PROMOTION" : null),
+            store_id,
+            merchant_name: String(item.merchant_name || item.name || item.title || item.text?.title || customData.name || customParams.name || "Unknown").replace(/\\u0026/g, '&'),
+            is_sponsored: meta.is_sponsored,
+            has_discount: meta.has_discount,
+            rank: customParams.rank || rank++,
+            offer_title: meta.promo_title ? String(meta.promo_title).replace(/\\u0026/g, '&') : null,
+            discount_type: item.discount_type || (meta.has_discount ? "PROMOTION" : null),
             delivery_fee: String(item.delivery_fee || item.delivery_fee_amount || item.deliveryFee || ""),
-            rating: rating ? Number(rating) : null,
-            review_count: reviewCount ? Number(reviewCount) : null,
-            source: item.source || 'script'
+            rating: meta.rating ? Number(meta.rating) : null,
+            review_count: meta.reviewCount ? Number(meta.reviewCount) : null,
+            source: item.source || customParams.source || 'script',
+            raw_badges: meta.badges,
+            raw_snippet: JSON.stringify({ ...item, ...customParams }).substring(0, 1000)
         });
     }
 
-    function findMerchantsNested(obj: any) {
+    function findMerchantsNested(obj: any, customParams: any = {}) {
         if (!obj || typeof obj !== 'object') return;
-        if (obj.__typename === 'Store' || obj.__typename === 'Merchant' || obj.__typename === 'Business' || obj.__typename === 'FacetV2' || obj.store_id || obj.business_id || obj.id || obj.id_str) {
-            addMerchantFromData(obj);
+        
+        const isMerchant = obj.__typename === 'Store' || obj.__typename === 'Merchant' || 
+                           obj.__typename === 'Business' || obj.__typename === 'FacetV2' ||
+                           obj.store_id || obj.business_id || (obj.id && obj.merchant_name);
+                           
+        if (isMerchant) {
+            addMerchantFromData(obj, customParams);
         }
+        
         if (Array.isArray(obj)) {
-            obj.forEach(i => findMerchantsNested(i));
+            obj.forEach(i => findMerchantsNested(i, customParams));
         } else {
-            Object.values(obj).forEach(v => findMerchantsNested(v));
+            for (const key in obj) {
+                if (key !== '__typename' && typeof obj[key] === 'object') {
+                    findMerchantsNested(obj[key], customParams);
+                }
+            }
         }
     }
+
+    // 1. Raw RSC Path
+    if (isRawRsc) {
+        const jsonBlocks = html.match(/\{"__typename":"Store",.*?\}/g) || html.match(/\{.*?\}/g);
+        if (jsonBlocks) {
+            for (const block of jsonBlocks) {
+                try {
+                    const parsed = JSON.parse(block);
+                    findMerchantsNested(parsed, { source: 'script', card_position: rscCounter++ });
+                } catch (e) {}
+            }
+        }
+        const merchants = Array.from(merchantMap.values()).sort((a, b) => a.rank - b.rank);
+        if (merchants.length > 0) return { status: "SUCCESS", merchants };
+    }
+
+    // 2. HTML Path (Cheerio)
+    const $ = cheerio.load(html);
 
     // 1. Extract from Scripts
     $('script').each((idx, s) => {
@@ -168,12 +183,21 @@ export function parseListings(html: string): ParseResult {
                 const jsonMatch = content.match(/__APOLLO_STATE__\s*=\s*(\{.*?\});?$/m) || content.match(/(\{.*\})/);
                 if (jsonMatch) findMerchantsNested(JSON.parse(jsonMatch[1]));
             } else if (content.includes('self.__next_f.push')) {
-                const matches = content.matchAll(/self\.__next_f\.push\(\[1,"([^"]+)"\]\)/g);
+                const matches = content.matchAll(/self\.__next_f\.push\(\[([0-9]),\s*"([^"]+)"\]\)/g);
                 for (const m of matches) {
                     try {
-                        const unescaped = m[1].replace(/\\"/g, '"').replace(/\\\\/g, '\\');
-                        const jsonContent = unescaped.match(/(\{.*\})/);
-                        if (jsonContent) findMerchantsNested(JSON.parse(jsonContent[1]));
+                        const payload = m[2];
+                        const unescaped = payload.replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+                        // Use a broader match and then filter in findMerchantsNested
+                        const jsonBlocks = unescaped.match(/\{.*?\}/g);
+                        if (jsonBlocks) {
+                            for (const block of jsonBlocks) {
+                                try { 
+                                    const parsed = JSON.parse(block);
+                                    findMerchantsNested(parsed, { source: 'script', card_position: rscCounter++ });
+                                } catch (e) {}
+                            }
+                        }
                     } catch (e) {}
                 }
             }
@@ -183,36 +207,48 @@ export function parseListings(html: string): ParseResult {
     // 2. Fallback to DOM (Cheerio)
     $('[data-anchor-id="StoreCard"], [data-testid="StoreCard"], a[href*="/store/"]').each((i, el) => {
         const $el = $(el);
-        const name = $el.find('[data-testid="StoreName"], h3, h2, span[title]').first().text() || $el.find('span').first().text() || $el.attr('aria-label') || "";
+        const name = $el.find('[data-testid="StoreName"], h3, h2, span[title]').first().text() || $el.attr('aria-label') || "";
         const href = $el.attr('href') || $el.find('a[href*="/store/"]').attr('href') || "";
         const store_id = href.match(/\/store\/[^/]+-([0-9]+)/)?.[1] || href.match(/\/store\/([^\/?#]+)/)?.[1] || "";
-        const offerText = $el.find('[data-testid*="offer"], [data-testid="STORE_TEXT_PRICING_INFO"], [color="discount"]').text() || "";
+        const is_sponsored = $el.text().toLowerCase().includes('sponsored') || $el.text().toLowerCase().includes(' ad ');
         
         if (name && store_id) {
-            addMerchantFromData({ name, store_id, offer_title: offerText, source: 'dom' });
+            addMerchantFromData({ name, store_id, is_sponsored, source: 'dom' }, { card_position: i });
         }
     });
 
     // 3. Deep Scan (Regex)
-    const storeIdMatches = html.matchAll(/\\{0,7}"store_id\\{0,7}":\\{0,7}"([0-9]+)\\{0,7}"/g);
+    const storeIdMatches = html.matchAll(/"store_id":\s*"([0-9]+)"/g);
     for (const match of storeIdMatches) {
         const storeId = match[1];
         const pos = match.index || 0;
-        const context = html.substring(Math.max(0, pos - 2500), Math.min(html.length, pos + 2500));
-        
-        const titleMatch = context.match(/\\{0,7}"(?:title|name|merchant_name)\\{0,7}":\\{0,7}"((?:\\\\"|[^"])*?)\\{0,7}"/);
-        const promoMatch = context.match(/\\{0,7}"(?:promotion_title|promotionTitle|subtitle|accessory_text|description)\\{0,7}":\\{0,7}"((?:\\\\"|[^"])*?(?:off|save|promo|free|reduced|\$[0-9])(?:\\\\"|[^"])*?)\\{0,7}"/i);
-        const sponsoredMatch = context.match(/\\{0,7}"(?:is_sponsored|isSponsored|is_promoted)\\{0,7}":\\{0,7}"?(?:true|1)\\{0,7}"?/i);
-        const adMatch = context.match(/\\{0,7}"(?:ad_id|_ad_id|adId)\\{0,7}":\\{0,7}"([^\\"n][^\\"]*)\\{0,7}"/);
-
+        const context = html.substring(Math.max(0, pos - 1000), Math.min(html.length, pos + 1000));
+        const titleMatch = context.match(/"(?:title|name|merchant_name)":\s*"([^"]+)"/);
         if (titleMatch) {
-            addMerchantFromData({ 
-                title: titleMatch[1].replace(/\\\\"/g, '"'), 
-                store_id: storeId, 
-                is_sponsored: !!(sponsoredMatch || adMatch),
-                promotion_title: promoMatch?.[1]?.replace(/\\\\"/g, '"'),
-                source: 'regex'
-            });
+            addMerchantFromData({ name: titleMatch[1], store_id: storeId, source: 'regex' });
+        }
+    }
+
+    // 4. Brute Force (Final Fallback)
+    if (merchantMap.size === 0) {
+        // Look for any Store-like objects in the entire HTML (handles escaped JSON too)
+        const blocks = html.match(/\\{0,7}"__typename\\{0,7}":\\{0,7}"Store\\{0,7}".*?\\{0,7}\}/g) || 
+                       html.match(/\{"__typename":"Store".*?\}/g);
+        if (blocks) {
+            for (const b of blocks) {
+                try {
+                    // Try to clean/unescape for JSON.parse
+                    let clean = b;
+                    if (b.includes('\\"')) {
+                         clean = b.replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+                    }
+                    if (!clean.startsWith('{')) clean = '{' + clean;
+                    if (!clean.endsWith('}')) clean = clean + '}';
+                    
+                    const parsed = JSON.parse(clean);
+                    findMerchantsNested(parsed, { source: 'brute', card_position: rscCounter++ });
+                } catch (e) {}
+            }
         }
     }
 

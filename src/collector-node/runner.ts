@@ -23,11 +23,11 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
     let successCount = 0;
     let failCount = 0;
     let lastFailureReason: string = "";
-    const observations: any[] = [];
+    let observations: any[] = [];
     
     // Final Optimized Objectives
     const objectives = [
-        { name: "Home", path: "", surface: "searchCategory" as const },
+        { name: "Home", path: "search/store/restaurants/", surface: "searchCategory" as const },
         { name: "Healthy", path: "search/store/healthy/", surface: "searchCategory" as const },
         { name: "Mexican", path: "search/store/mexican/", surface: "searchCategory" as const },
         { name: "Salad", path: "search/store/salad/", surface: "searchCategory" as const },
@@ -75,6 +75,7 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                                 console.log(`     ✅ Found ${result.merchants.length}`);
                                 success = true;
                                 successCount++;
+                                
                                 result.merchants.forEach((m: any) => {
                                     observations.push({
                                         run_id: runId, market_id: market.market_id, city: market.city,
@@ -85,7 +86,20 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                                         raw_snippet: m.raw_snippet
                                     });
                                 });
-                                break;
+
+                                // Incremental Ingestion: Per Objective (to avoid Worker CPU limits)
+                                if (observations.length > 0) {
+                                    try {
+                                        await pushToApi(apiUrl, apiKey, { run_id: runId, base_run_id: runId, shard: manualShard }, observations);
+                                        const s = observations.filter(o => o.is_sponsored).length;
+                                        const d = observations.filter(o => o.has_discount).length;
+                                        console.log(`     ✅ Ingested ${observations.length} items for ${obj.name} (S: ${s}, D: ${d})`);
+                                        observations = []; // Clear for next objective
+                                    } catch (e: any) {
+                                        console.error(`     ❌ Ingest Failed for ${obj.name}: ${e.message}`);
+                                    }
+                                }
+                                break; // Break retry loop for this tier if successful
                             } else {
                                 console.log(`     ⚠️  Parse: ${result.status}`);
                             }
@@ -107,6 +121,18 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                 lastFailureReason = `${obj.name} failed all tiers`;
             }
         }
+
+        // Incremental push for dashboard visibility
+        if (observations.length > 0) {
+            const sponsoredCount = observations.filter(o => o.is_sponsored).length;
+            const discountCount = observations.filter(o => o.has_discount).length;
+            console.log(`Ingesting ${observations.length} items for ${market.city} (S: ${sponsoredCount}, D: ${discountCount})...`);
+            const CHUNK = 500;
+            for (let i = 0; i < observations.length; i += CHUNK) {
+                await pushToApi(apiUrl, apiKey, null, observations.slice(i, i + CHUNK));
+            }
+            observations.length = 0; // Clear for next market
+        }
     }
 
     const finalStatus = failCount === 0 ? "SUCCESS" : (successCount > 0 ? "PARTIAL" : "FAILED");
@@ -117,13 +143,6 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
     };
 
     console.log(`\nShard Result: ${finalStatus} (${successCount} S, ${failCount} F)`);
-    console.log(`Ingesting ${observations.length} items...`);
-    
-    await pushToApi(apiUrl, apiKey, { ...runData, status: "INGESTING" }, []);
-    const CHUNK = 500;
-    for (let i = 0; i < observations.length; i += CHUNK) {
-         await pushToApi(apiUrl, apiKey, null, observations.slice(i, i + CHUNK));
-    }
     await pushToApi(apiUrl, apiKey, runData, []);
 
     return finalStatus;
