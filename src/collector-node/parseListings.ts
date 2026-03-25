@@ -81,6 +81,9 @@ export function parseListings(html: string): ParseResult {
         const store_id = item.store_id || item.business_id || item.id || item.id_str;
         if (!name || !store_id || String(name).toLowerCase().includes('doordash')) return;
         
+        // Exclude common vertical tabs that masquerade as stores in FacetV2
+        if (['All', 'Alcohol', 'Grocery', 'Restaurant', 'Deals', 'New'].includes(name)) return;
+        
         if (merchants.some(m => m.store_id === String(store_id))) return;
 
         const is_sponsored = !!(item.is_sponsored || item.isSponsored || item.ad_id || item.isAd || item.is_promoted);
@@ -151,6 +154,32 @@ export function parseListings(html: string): ParseResult {
             });
         }
     });
+    
+    // 3. Deep Scan (Regex) - The "Safe" Fallback for RSC / FacetV2
+    // This finds patterns like \"title\":\"Name\" and \"store_id\":\"12345\" regardless of nesting.
+    const titlePattern = /\\"title\\":\\"([^\\"]+)\\"/g;
+    const idPattern = /\\"store_id\\":\\"(\d+)\\"/g;
+    
+    const titles = [...html.matchAll(titlePattern)].map(m => m[1]);
+    const ids = [...html.matchAll(idPattern)].map(m => m[1]);
+    
+    // We try to match them up if they appear in pairs (DoorDash usually lists them together in the same order)
+    if (titles.length > 0 && ids.length > 0 && Math.abs(titles.length - ids.length) < 5) {
+        for (let i = 0; i < Math.min(titles.length, ids.length); i++) {
+            addMerchantFromData({ name: titles[i], store_id: ids[i] });
+        }
+    }
+
+    // Also look for unescaped versions just in case
+    if (merchants.length === 0) {
+        const uTitlePattern = /"title":"([^"]+)"/g;
+        const uIdPattern = /"store_id":"(\d+)"/g;
+        const uTitles = [...html.matchAll(uTitlePattern)].map(m => m[1]);
+        const uIds = [...html.matchAll(uIdPattern)].map(m => m[1]);
+        for (let i = 0; i < Math.min(uTitles.length, uIds.length); i++) {
+            addMerchantFromData({ name: uTitles[i], store_id: uIds[i] });
+        }
+    }
 
     return merchants.length > 0 ? { status: "SUCCESS", merchants } : { status: "PARSE_SCHEMA_CHANGED", merchants: [] };
 }

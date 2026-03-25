@@ -57,7 +57,7 @@ async function runQA() {
                             proxyUrl: proxy,
                             headers: cookies ? { 'Cookie': cookies } : {},
                             headerGeneratorOptions: { browsers: ['chrome'], os: ['macos', 'windows'] },
-                            timeout: { request: 15000 }
+                            timeout: { request: 20000 }
                         });
 
                         if (response.statusCode === 200) {
@@ -70,6 +70,10 @@ async function runQA() {
                             } else {
                                 lastError = `Parse Error: ${parseResult.status}`;
                             }
+                        } else if (response.statusCode === 403) {
+                            lastError = `HTTP 403 (Blocked)`;
+                            // Break the retry loop for this tier on 403 to move to next tier faster
+                            break;
                         } else {
                             lastError = `HTTP ${response.statusCode}`;
                         }

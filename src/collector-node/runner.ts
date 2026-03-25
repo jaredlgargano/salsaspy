@@ -66,7 +66,7 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                             proxyUrl: proxy || undefined,
                             headers: cookiesStr ? { 'Cookie': cookiesStr } : {},
                             headerGeneratorOptions: { browsers: ['chrome'], os: ['macos', 'windows'] },
-                            timeout: { request: 12000 }
+                            timeout: { request: 20000 }
                         });
 
                         if (response.statusCode === 200) {
@@ -92,7 +92,9 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                         } else if (response.statusCode === 401 && cookiesStr) {
                             markBanned(cookiesStr);
                         } else if (response.statusCode === 403) {
-                            console.log(`     ⚠️  HTTP 403 (Blocked IP or Session)`);
+                            console.log(`     ⚠️  HTTP 403 (Blocked IP or Session) - Switching Tier`);
+                            // Break the retry loop for this tier on 403 to move to next tier faster
+                            break; 
                         }
                     } catch (e: any) {
                         console.log(`     💥 Error: ${e.message.split('\n')[0]}`);
