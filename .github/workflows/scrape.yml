@@ -44,9 +44,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Playwright Browsers
-        run: npx playwright install --with-deps chromium
-
       - name: Load DoorDash accounts (cookies)
         env:
           DOORDASH_ACCOUNTS: ${{ secrets.DOORDASH_ACCOUNTS }}
