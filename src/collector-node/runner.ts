@@ -157,7 +157,13 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
         headers: { 'Authorization': `Bearer ${apiKey}` }
     });
     
-    if (!marketRes.ok) return "FAILED";
+    if (!marketRes.ok) {
+        const errText = await marketRes.text();
+        console.error(`Failed to fetch markets: ${marketRes.status} ${marketRes.statusText}`);
+        console.error(`URL: ${apiUrl}/v1/markets?${urlParams}`);
+        console.error(`Response: ${errText}`);
+        return "FAILED";
+    }
 
     let { markets } = await marketRes.json() as { markets: any[] };
     if (markets.length === 0) return "SUCCESS";
