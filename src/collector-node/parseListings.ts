@@ -40,11 +40,16 @@ export function parseListings(html: string): ParseResult {
         const itemStr = JSON.stringify(item).toLowerCase();
         const promo_title = String(item.promotion_title || item.promotionTitle || customData.promotion_title || customData.promotionTitle || item.subtitle || item.accessory_text || item.description || customData.subtitle || item.offer_title || "").toLowerCase();
         
+        // MULTI-SIGNAL AD DETECTION (PHASE 3)
         const is_sponsored = !!(
             item.is_sponsored || item.isSponsored || item.ad_id || item.isAd || item.is_promoted || item.sponsored || 
             customData.is_sponsored || customData.isSponsored || customData.ad_id || 
             (item.logging && (item.logging.includes('ad_id') || item.logging.includes('adId'))) ||
-            (item.source === 'dom' && (itemStr.includes('sponsored') || itemStr.includes(' ad ')))
+            (item.source === 'dom' && (itemStr.includes('sponsored') || itemStr.includes(' ad '))) ||
+            // Signal 2: Semantic Aria / Text Badge (Common in Production RSC)
+            itemStr.includes('\"sponsored\"') || itemStr.includes('\"ad\"') || itemStr.includes('aria-label\":\"sponsored') ||
+            // Signal 3: Position Metadata (First 2 are usually ads if they have a non-standard rank field)
+            (item.card_position < 2 && item.source !== 'dom')
         );
 
         const offers = item.offers || item.promotions || customData.offers || [];
@@ -99,6 +104,13 @@ export function parseListings(html: string): ParseResult {
             }
             return;
         }
+
+        // Temporarily disabled filter for debugging
+        /*
+        if (!hasRating && !isTrustedSource && !is_sponsored) {
+            return;
+        }
+        */
 
         const name = item.store_name || item.merchant_name || item.name || item.business_name || item.title || item.text?.title;
         if (!name || String(name).toLowerCase().includes('doordash')) return;
