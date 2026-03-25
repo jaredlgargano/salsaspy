@@ -77,6 +77,20 @@ export function parseListings(jsonStr: string): ParseResult {
             let offerTitle = null;
             
             const rawStr = JSON.stringify(store);
+
+            try {
+                if (store.logging) {
+                    const logObj = JSON.parse(store.logging);
+                    if (logObj.is_sponsored === true || logObj.is_promoted === true) {
+                        isSponsored = true;
+                    }
+                }
+            } catch (e) {}
+            
+            if (!isSponsored && (rawStr.includes('"is_sponsored":true') || rawStr.includes('Sponsored') || rawStr.includes('"is_promoted":true'))) {
+                isSponsored = true;
+            }
+            
             const texts = [
                 store.text?.subtitle,
                 store.text?.description,
@@ -91,10 +105,6 @@ export function parseListings(jsonStr: string): ParseResult {
                 if (t.toLowerCase().includes('delivery') || t.includes('$')) {
                     deliveryFee = t;
                 }
-            }
-
-            if (rawStr.includes('Sponsored') || rawStr.includes('ad_impression') || store.logging?.includes('ad_impression')) {
-                isSponsored = true;
             }
             
             if (rawStr.toLowerCase().includes('offer') || rawStr.includes('discount') || rawStr.includes('% off')) {
