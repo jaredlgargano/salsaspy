@@ -1,7 +1,7 @@
 import { pushToApi } from "./ingest";
 import { parseListings } from "./parseListings";
 import { getNextCookies, markBanned } from "./cookieRotator";
-import { getScraperApiProxy, getRandomProxy } from "./freeProxy";
+import { getScraperApiProxy, getRandomProxy, getScraperApiUrl } from "./freeProxy";
 
 export async function runShard(apiUrl: string, apiKey: string, now: Date, runId: string, manualShard: number): Promise<string> {
     console.log(`Starting runShard (Browser-Free) for shard ${manualShard}`);
@@ -53,22 +53,34 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                 for (let r = 0; r < tier.retries; r++) {
                     if (success) break;
                     const proxy = tier.useProxy ? (process.env.PROXY_URL || getScraperApiProxy() || getRandomProxy()) : undefined;
+                    const apiModeUrl = tier.useProxy ? getScraperApiUrl(url, tier.type === 'Proxy') : undefined;
                     
-                    console.log(`  -> [${obj.name}] Tier: ${tier.type} (Try ${r+1}/${tier.retries}) | Proxy: ${proxy?.includes('scraperapi') ? 'ScraperAPI' : (proxy ? 'FREE' : 'NONE')}`);
+                    console.log(`  -> [${obj.name}] Tier: ${tier.type} (Try ${r+1}/${tier.retries}) | Proxy: ${apiModeUrl ? 'ScraperAPI (API)' : (proxy ? 'FREE' : 'NONE')}`);
                     try {
                         const { gotScraping } = await import('got-scraping');
                         const cookiesStr = tier.useCookies ? (getNextCookies() || "") : "";
                         
-                        const response = await gotScraping({
-                            url,
-                            proxyUrl: proxy || undefined,
-                            headers: cookiesStr ? { 'Cookie': cookiesStr } : {},
-                            headerGeneratorOptions: { browsers: ['chrome'], os: ['macos', 'windows'] },
-                            timeout: { request: 60000 }
-                        });
+                        let responseBody = "";
+                        let statusCode = 0;
 
-                        if (response.statusCode === 200) {
-                            const result = parseListings(response.body);
+                        if (apiModeUrl) {
+                            const res = await fetch(apiModeUrl, { timeout: 90000 } as any);
+                            statusCode = res.status;
+                            responseBody = await res.text();
+                        } else {
+                            const response = await gotScraping({
+                                url,
+                                proxyUrl: proxy || undefined,
+                                headers: cookiesStr ? { 'Cookie': cookiesStr } : {},
+                                headerGeneratorOptions: { browsers: ['chrome'], os: ['macos', 'windows'] },
+                                timeout: { request: 60000 }
+                            });
+                            statusCode = response.statusCode;
+                            responseBody = response.body;
+                        }
+
+                        if (statusCode === 200) {
+                            const result = parseListings(responseBody);
                             if (result.status === "SUCCESS") {
                                 console.log(`     ✅ Found ${result.merchants.length}`);
                                 success = true;
@@ -97,9 +109,9 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                             } else {
                                 console.log(`     ⚠️  Parse: ${result.status}`);
                             }
-                        } else if (response.statusCode === 401 && cookiesStr) {
+                        } else if (statusCode === 401 && cookiesStr) {
                             markBanned(cookiesStr);
-                        } else if (response.statusCode === 403) {
+                        } else if (statusCode === 403) {
                             console.log(`     ⚠️  HTTP 403 (Blocked IP or Session) - Switching Tier`);
                             break; 
                         }

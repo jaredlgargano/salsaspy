@@ -535,70 +535,93 @@ export function setupRoutes(app: Hono<{ Bindings: ApiEnv }>) {
             }
         }
 
-        // Insert observations in batches of 50 to satisfy D1 limits
-        const observations = body.observations || [];
-        if (observations.length > 0) {
-            const insertStmt = c.env.DB.prepare(`
-                INSERT INTO observations (obs_id, run_id, market_id, observed_at, category, surface, merchant_name, brand_normalized, rank, is_sponsored, has_discount, offer_title, raw_snippet, store_id, discount_type, delivery_fee, rating, review_count, city)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `);
-
-            // Use a for loop to chunk the observations into batches of 50
+        try {
+            const observations = body.observations || [];
             const unknownBrands = new Set<string>();
             const CHUNK_SIZE = 50;
-            for (let i = 0; i < observations.length; i += CHUNK_SIZE) {
-                const chunk = observations.slice(i, i + CHUNK_SIZE);
-                const batch = [];
-                for (const obs of chunk) {
-                    const norm = normalizeBrand(obs.merchant_name || "");
-                    if (obs.merchant_name && !isKnownBrand(obs.merchant_name) && norm === obs.merchant_name) {
-                        unknownBrands.add(obs.merchant_name);
+            
+            if (observations.length > 0) {
+                const insertStmt = c.env.DB.prepare(`
+                    INSERT INTO observations (obs_id, run_id, market_id, observed_at, category, surface, merchant_name, brand_normalized, rank, is_sponsored, has_discount, offer_title, raw_snippet, store_id, discount_type, delivery_fee, rating, review_count, city)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `);
+
+                for (let i = 0; i < observations.length; i += CHUNK_SIZE) {
+                    const chunk = observations.slice(i, i + CHUNK_SIZE);
+                    const batch = [];
+                    for (const obs of chunk) {
+                        const norm = normalizeBrand(obs.merchant_name || "");
+                        if (obs.merchant_name && !isKnownBrand(obs.merchant_name) && norm === obs.merchant_name) {
+                            unknownBrands.add(obs.merchant_name);
+                        }
+                        const obsId = `${obs.run_id || 'no-run'}-${obs.market_id || 'no-market'}-${obs.category || 'none'}-${obs.rank || 0}-${i + chunk.indexOf(obs)}-${Date.now()}`;
+                        batch.push(
+                            insertStmt.bind(
+                                obsId, 
+                                obs.run_id || null, 
+                                obs.market_id || null, 
+                                obs.observed_at || new Date().toISOString(), 
+                                obs.category || 'None', 
+                                obs.surface || 'searchCategory',
+                                obs.merchant_name || 'Unknown', 
+                                norm || 'Unknown', 
+                                obs.rank || 0, 
+                                obs.is_sponsored ? 1 : 0, 
+                                obs.has_discount ? 1 : 0,
+                                obs.offer_title || null, 
+                                obs.raw_snippet || null,
+                                obs.store_id || null, 
+                                obs.discount_type || null, 
+                                obs.delivery_fee || null,
+                                obs.rating || null, 
+                                obs.review_count || null, 
+                                obs.city || null
+                            )
+                        );
                     }
-                    const obsId = `${obs.run_id || 'no-run'}-${obs.market_id || 'no-market'}-${obs.category || 'none'}-${obs.rank || 0}-${i + chunk.indexOf(obs)}-${Date.now()}`;
-                    batch.push(
-                        insertStmt.bind(
-                            obsId, 
-                            obs.run_id || null, 
-                            obs.market_id || null, 
-                            obs.observed_at || new Date().toISOString(), 
-                            obs.category || 'None', 
-                            obs.surface || 'searchCategory',
-                            obs.merchant_name || 'Unknown', 
-                            norm || 'Unknown', 
-                            obs.rank || 0, 
-                            obs.is_sponsored ? 1 : 0, 
-                            obs.has_discount ? 1 : 0,
-                            obs.offer_title || null, 
-                            obs.raw_snippet || null,
-                            obs.store_id || null, 
-                            obs.discount_type || null, 
-                            obs.delivery_fee || null,
-                            obs.rating || null, 
-                            obs.review_count || null, 
-                            obs.city || null
-                        )
-                    );
+                    if (batch.length > 0) {
+                        await c.env.DB.batch(batch);
+                    }
                 }
-                if (batch.length > 0) {
-                    await c.env.DB.batch(batch);
+
+                // Record unknown brands efficiently
+                if (unknownBrands.size > 0) {
+                    for (const brand of unknownBrands) {
+                        c.executionCtx.waitUntil(recordUnknownBrand(c.env.DB, brand));
+                    }
                 }
             }
 
-            // Record unknown brands efficiently after ingestion
-            if (unknownBrands.size > 0) {
-                for (const brand of unknownBrands) {
-                    c.executionCtx.waitUntil(recordUnknownBrand(c.env.DB, brand));
+            // Update run status if provided
+            if (body.run && body.run.run_id) {
+                const { run_id, status, failure_reason, metadata, shard, shard_total, started_at, ended_at } = body.run;
+                await c.env.DB.prepare(`
+                    INSERT OR REPLACE INTO runs (run_id, status, failure_reason, metadata, shard, shards_total, started_at, ended_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                `).bind(
+                    run_id, 
+                    status || 'running', 
+                    failure_reason || null, 
+                    metadata ? JSON.stringify(metadata) : null,
+                    shard || null,
+                    shard_total || null,
+                    started_at || null,
+                    ended_at || null
+                ).run();
+
+                // Only recompute aggregates when a shard FINISHES (SUCCESS, FAILED, or PARTIAL)
+                if (status && status !== 'running') {
+                    const dateToRecompute = started_at
+                        ? started_at.slice(0, 10)
+                        : new Date().toISOString().slice(0, 10);
+                    c.executionCtx.waitUntil(recomputeAggregatesForDate(c.env.DB, dateToRecompute));
                 }
             }
 
-            // Only auto-recompute if explicitly requested or if it's the final part of a run
-            // (In practice, we recompute for every ingest to keep dashboard fresh, but we can optimize later)
-            const dateToRecompute = body.run?.started_at
-                ? body.run.started_at.slice(0, 10)
-                : new Date().toISOString().slice(0, 10);
-            c.executionCtx.waitUntil(recomputeAggregatesForDate(c.env.DB, dateToRecompute));
+            return c.json({ success: true, ingested: observations.length });
+        } catch (e: any) {
+            console.error(`Ingest Error: ${e.message}`);
+            return c.json({ success: false, error: e.message }, 500);
         }
-
-        return c.json({ success: true, ingested: body.observations?.length || 0 });
     });
 }

@@ -2,6 +2,10 @@ export async function recomputeAggregatesForDate(db: any, dateStr: string) {
     // 1. Delete existing for the date
     await db.prepare("DELETE FROM aggregates_daily WHERE date = ?").bind(dateStr).run();
 
+    // 2. Prepare range parameters (start and end of day)
+    const startOfDay = `${dateStr}T00:00:00.000Z`;
+    const endOfDay = `${dateStr}T23:59:59.999Z`;
+
     // 2. Insert new Enterprise CI aggregates
     await db.prepare(`
         INSERT INTO aggregates_daily (
@@ -13,7 +17,7 @@ export async function recomputeAggregatesForDate(db: any, dateStr: string) {
                 run_id, city, category, surface, brand_normalized,
                 MIN(rank) as min_rank
             FROM observations
-            WHERE strftime('%Y-%m-%d', observed_at) = ?
+            WHERE observed_at >= ? AND observed_at <= ?
             GROUP BY run_id, city, category, surface, brand_normalized
         ),
         avg_min_ranks AS (
@@ -29,7 +33,7 @@ export async function recomputeAggregatesForDate(db: any, dateStr: string) {
                 COUNT(DISTINCT store_id) as unique_stores,
                 COUNT(DISTINCT CASE WHEN has_discount = 1 THEN store_id END) as discounted_stores
             FROM observations
-            WHERE strftime('%Y-%m-%d', observed_at) = ?
+            WHERE observed_at >= ? AND observed_at <= ?
             GROUP BY city, category, surface, brand_normalized
         ),
         obs_stats AS (
@@ -38,7 +42,7 @@ export async function recomputeAggregatesForDate(db: any, dateStr: string) {
                 COUNT(*) as total_obs,
                 SUM(is_sponsored) as sponsored_count
             FROM observations
-            WHERE strftime('%Y-%m-%d', observed_at) = ?
+            WHERE observed_at >= ? AND observed_at <= ?
             GROUP BY city, category, surface, brand_normalized
         )
         SELECT 
@@ -55,5 +59,5 @@ export async function recomputeAggregatesForDate(db: any, dateStr: string) {
         FROM obs_stats o
         JOIN avg_min_ranks a USING (city, category, surface, brand_normalized)
         JOIN store_stats s USING (city, category, surface, brand_normalized)
-    `).bind(dateStr, dateStr, dateStr, dateStr).run();
+    `).bind(startOfDay, endOfDay, startOfDay, endOfDay, startOfDay, endOfDay, dateStr).run();
 }

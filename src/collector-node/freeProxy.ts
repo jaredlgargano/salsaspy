@@ -57,8 +57,19 @@ export async function initializeProxies() {
 export function getScraperApiProxy(): string | undefined {
     const key = process.env.SCRAPER_API_KEY;
     if (!key) return undefined;
-    // Standard ScraperAPI endpoint
     return `http://scraperapi:${key}@proxy-server.scraperapi.com:8001`;
+}
+
+/**
+ * Constructs a ScraperAPI REST API URL.
+ * Using the API instead of the Proxy port is often more stable for timeouts
+ * because ScraperAPI manages the entire lifecycle and retries internally.
+ */
+export function getScraperApiUrl(targetUrl: string, render: boolean = false): string | undefined {
+    const key = process.env.SCRAPER_API_KEY;
+    if (!key) return undefined;
+    const base = `https://api.scraperapi.com/?api_key=${key}&url=${encodeURIComponent(targetUrl)}`;
+    return render ? `${base}&render=true` : base;
 }
 
 /**
