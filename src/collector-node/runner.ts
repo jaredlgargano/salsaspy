@@ -169,6 +169,7 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
         const errText = marketRes ? await marketRes.text() : "Request Timeout";
         console.error(`Failed to fetch markets after ${maxRetries} attempts: ${marketRes?.status || '??'}`);
         console.error(`URL: ${apiUrl}/v1/markets?${urlParams}`);
+        console.error(`Response: ${errText}`);
         return "FAILED";
     }
 
