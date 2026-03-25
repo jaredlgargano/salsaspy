@@ -1,6 +1,8 @@
 name: Run DoorDash Playwright Scraper
 
 on:
+  push:
+    branches: [ master ]
   schedule:
     # Run every hour at minute 30.
     - cron: '30 * * * *'
