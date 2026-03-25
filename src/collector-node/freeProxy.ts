@@ -52,8 +52,17 @@ export async function initializeProxies() {
 }
 
 /**
+ * Constructs a ScraperAPI proxy URL if the key is available.
+ */
+export function getScraperApiProxy(): string | undefined {
+    const key = process.env.SCRAPER_API_KEY;
+    if (!key) return undefined;
+    // Standard ScraperAPI endpoint
+    return `http://scraperapi:${key}@proxy-server.scraperapi.com:8001`;
+}
+
+/**
  * Gets a random proxy from the loaded list.
- * Returns undefined if no proxies are available.
  */
 export function getRandomProxy(): string | undefined {
     if (proxyList.length === 0) return undefined;

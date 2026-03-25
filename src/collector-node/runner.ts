@@ -1,7 +1,7 @@
 import { pushToApi } from "./ingest";
 import { parseListings } from "./parseListings";
 import { getNextCookies, markBanned } from "./cookieRotator";
-import { getRandomProxy } from "./freeProxy";
+import { getScraperApiProxy, getRandomProxy } from "./freeProxy";
 
 export async function runShard(apiUrl: string, apiKey: string, now: Date, runId: string, manualShard: number): Promise<string> {
     console.log(`Starting runShard (Browser-Free) for shard ${manualShard}`);
@@ -54,9 +54,9 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                 
                 for (let r = 0; r < tier.retries; r++) {
                     if (success) break;
-                    const proxy = tier.useProxy ? (process.env.PROXY_URL || getRandomProxy()) : undefined;
+                    const proxy = tier.useProxy ? (process.env.PROXY_URL || getScraperApiProxy() || getRandomProxy()) : undefined;
                     
-                    console.log(`  -> [${obj.name}] Tier: ${tier.type} (Try ${r+1}/${tier.retries}) | Proxy: ${proxy ? 'YES' : 'NONE'}`);
+                    console.log(`  -> [${obj.name}] Tier: ${tier.type} (Try ${r+1}/${tier.retries}) | Proxy: ${proxy?.includes('scraperapi') ? 'ScraperAPI' : (proxy ? 'FREE' : 'NONE')}`);
                     try {
                         const { gotScraping } = await import('got-scraping');
                         const cookiesStr = tier.useCookies ? (getNextCookies() || "") : "";
@@ -66,7 +66,7 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                             proxyUrl: proxy || undefined,
                             headers: cookiesStr ? { 'Cookie': cookiesStr } : {},
                             headerGeneratorOptions: { browsers: ['chrome'], os: ['macos', 'windows'] },
-                            timeout: { request: 20000 }
+                            timeout: { request: 60000 }
                         });
 
                         if (response.statusCode === 200) {
