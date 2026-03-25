@@ -25,7 +25,6 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
     let lastFailureReason: string = "";
     let observations: any[] = [];
     
-    // Final Optimized Objectives
     const objectives = [
         { name: "Home", path: "search/store/restaurants/", surface: "searchCategory" as const },
         { name: "Healthy", path: "search/store/healthy/", surface: "searchCategory" as const },
@@ -42,7 +41,6 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
             const url = `https://www.doordash.com/${obj.path}?lat=${market.latitude}&lng=${market.longitude}`;
             let success = false;
             
-            // Production Strategy: Direct -> Proxy -> Guest (all using got-scraping)
             const tiers = [
                 { type: 'Direct', useProxy: false, useCookies: true, retries: 1 },
                 { type: 'Proxy', useProxy: true, useCookies: true, retries: 3 },
@@ -75,31 +73,27 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                                 console.log(`     ✅ Found ${result.merchants.length}`);
                                 success = true;
                                 successCount++;
-                                
-                                result.merchants.forEach((m: any) => {
-                                    observations.push({
-                                        run_id: runId, market_id: market.market_id, city: market.city,
-                                        observed_at: now.toISOString(), category: obj.surface === "bestOfLunch" ? "None" : (obj.name === "Home" ? "None" : obj.name), 
-                                        surface: obj.surface, merchant_name: m.merchant_name, store_id: m.store_id, 
-                                        rank: m.rank, is_sponsored: m.is_sponsored, has_discount: m.has_discount, 
-                                        delivery_fee: m.delivery_fee, rating: m.rating, review_count: m.review_count,
-                                        raw_snippet: m.raw_snippet
-                                    });
-                                });
 
-                                // Incremental Ingestion: Per Objective (to avoid Worker CPU limits)
-                                if (observations.length > 0) {
+                                const merchantObs = result.merchants.map((m: any) => ({
+                                    run_id: runId, market_id: market.market_id, city: market.city,
+                                    observed_at: now.toISOString(), category: obj.surface === "bestOfLunch" ? "None" : (obj.name === "Home" ? "None" : obj.name), 
+                                    surface: obj.surface, merchant_name: m.merchant_name, store_id: m.store_id, 
+                                    rank: m.rank, is_sponsored: m.is_sponsored, has_discount: m.has_discount, 
+                                    delivery_fee: m.delivery_fee, rating: m.rating, review_count: m.review_count,
+                                    raw_snippet: m.raw_snippet
+                                }));
+
+                                if (merchantObs.length > 0) {
                                     try {
-                                        await pushToApi(apiUrl, apiKey, { run_id: runId, base_run_id: runId, shard: manualShard }, observations);
-                                        const s = observations.filter(o => o.is_sponsored).length;
-                                        const d = observations.filter(o => o.has_discount).length;
-                                        console.log(`     ✅ Ingested ${observations.length} items for ${obj.name} (S: ${s}, D: ${d})`);
-                                        observations = []; // Clear for next objective
+                                        await pushToApi(apiUrl, apiKey, { run_id: runId, base_run_id: runId, shard: manualShard }, merchantObs);
+                                        const s = merchantObs.filter(o => o.is_sponsored).length;
+                                        const d = merchantObs.filter(o => o.has_discount).length;
+                                        console.log(`     ✅ Ingested ${merchantObs.length} items for ${obj.name} (S: ${s}, D: ${d})`);
                                     } catch (e: any) {
                                         console.error(`     ❌ Ingest Failed for ${obj.name}: ${e.message}`);
                                     }
                                 }
-                                break; // Break retry loop for this tier if successful
+                                break; 
                             } else {
                                 console.log(`     ⚠️  Parse: ${result.status}`);
                             }
@@ -107,7 +101,6 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                             markBanned(cookiesStr);
                         } else if (response.statusCode === 403) {
                             console.log(`     ⚠️  HTTP 403 (Blocked IP or Session) - Switching Tier`);
-                            // Break the retry loop for this tier on 403 to move to next tier faster
                             break; 
                         }
                     } catch (e: any) {
@@ -120,18 +113,6 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
                 failCount++;
                 lastFailureReason = `${obj.name} failed all tiers`;
             }
-        }
-
-        // Incremental push for dashboard visibility
-        if (observations.length > 0) {
-            const sponsoredCount = observations.filter(o => o.is_sponsored).length;
-            const discountCount = observations.filter(o => o.has_discount).length;
-            console.log(`Ingesting ${observations.length} items for ${market.city} (S: ${sponsoredCount}, D: ${discountCount})...`);
-            const CHUNK = 500;
-            for (let i = 0; i < observations.length; i += CHUNK) {
-                await pushToApi(apiUrl, apiKey, null, observations.slice(i, i + CHUNK));
-            }
-            observations.length = 0; // Clear for next market
         }
     }
 

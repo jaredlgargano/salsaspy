@@ -30,7 +30,8 @@ export function parseListings(html: string): ParseResult {
     if (html.includes("cf-browser-verification") || html.includes("px-captcha") || 
         lower.includes("pardon our interruption") || lower.includes("access denied") || 
         lower.includes("just a moment") || lower.includes("enable cookies") || 
-        lower.includes("checking your browser")) {
+        lower.includes("checking your browser") || lower.includes("address needed") || 
+        lower.includes("choose an address") || lower.includes("select your address")) {
         return { status: "BLOCKED", merchants: [] };
     }
 
