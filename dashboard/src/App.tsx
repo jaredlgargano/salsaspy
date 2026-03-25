@@ -21,7 +21,8 @@ interface DashboardStats {
 }
 
 // Ensure the frontend talks to the local worker in dev, or deployed worker in prod.
-const API_BASE = 'https://doordash-scraper-api.uberscraper.workers.dev';
+// Use relative path in production (served from same worker), or localhost in dev.
+const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:8787' : '';
 
 function App() {
   const [stats, setStats] = useState<DashboardStats | null>(null);

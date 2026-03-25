@@ -481,6 +481,23 @@ export function setupRoutes(app: Hono<{ Bindings: ApiEnv }>) {
         return c.json({ success: true });
     });
 
+    // Clean up old data from previous schema
+    app.post("/v1/admin/cleanup", authMiddleware, async (c) => {
+        const { date_cutoff } = await c.req.json() as { date_cutoff?: string };
+        const cutoff = date_cutoff || '2026-03-24T00:00:00Z';
+        
+        console.log(`Cleaning up data before ${cutoff}...`);
+        
+        const results = [];
+        results.push(await c.env.DB.prepare("UPDATE markets SET active = 0 WHERE market_id NOT LIKE 'dma-%'").run());
+        results.push(await c.env.DB.prepare("DELETE FROM observations WHERE market_id NOT LIKE 'dma-%'").run());
+        results.push(await c.env.DB.prepare("DELETE FROM runs WHERE started_at < ?").bind(cutoff).run());
+        results.push(await c.env.DB.prepare("DELETE FROM aggregates_daily WHERE date < ?").bind(cutoff.slice(0, 10)).run());
+        results.push(await c.env.DB.prepare("DELETE FROM aggregates_monthly WHERE month = strftime('%Y-%m', 'now')").run());
+        
+        return c.json({ success: true, cleanup_results: results });
+    });
+
     // Ingest data from external Node.js Playwright script
     app.post("/v1/ingest", authMiddleware, async (c) => {
         const body: any = await c.req.json().catch(() => ({}));
