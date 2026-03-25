@@ -1,5 +1,5 @@
 import { runShard } from "./runner";
-import { initializeProxies } from "./freeProxy";
+
 import dotenv from "dotenv";
 
 dotenv.config({ path: ".dev.vars" });
@@ -16,9 +16,7 @@ async function start() {
         return found ? found.split('=')[1] : undefined;
     };
 
-    if (!process.env.PROXY_URL) {
-        await initializeProxies();
-    }
+
 
     // Support both env vars (local debug) and flags (GHA)
     const shardStr = getArg('shard') || process.env.SHARD;
