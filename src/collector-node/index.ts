@@ -4,8 +4,8 @@ import dotenv from "dotenv";
 
 dotenv.config({ path: ".dev.vars" });
 
-const API_URL = process.env.API_URL || "http://localhost:8787";
-const API_KEY = process.env.API_KEY || "my-super-secret-key";
+const API_URL = (process.env.API_URL || "https://doordash-scraper-api.uberscraper.workers.dev").trim().replace(/\/$/, "");
+const API_KEY = (process.env.API_KEY || "my-super-secret-key").trim();
 
 async function start() {
     console.log("Starting Node.js Playwright Collector...");

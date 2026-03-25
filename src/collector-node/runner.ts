@@ -153,15 +153,22 @@ export async function runShard(apiUrl: string, apiKey: string, now: Date, runId:
     const FORCE = process.env.FORCE_SCRAPE === "1";
     
     const urlParams = `shard=${manualShard}&shards_total=${SHARDS_TOTAL}&active=1${FORCE ? '' : '&unscraped_only=1'}`;
-    const marketRes = await fetch(`${apiUrl}/v1/markets?${urlParams}`, {
-        headers: { 'Authorization': `Bearer ${apiKey}` }
-    });
+    let marketRes;
+    const maxRetries = 3;
+    for (let i = 0; i < maxRetries; i++) {
+        marketRes = await fetch(`${apiUrl}/v1/markets?${urlParams}`, {
+            headers: { 'Authorization': `Bearer ${apiKey}` }
+        });
+        if (marketRes.ok) break;
+        
+        console.warn(`Retry ${i+1}/${maxRetries} to fetch markets...`);
+        await new Promise(r => setTimeout(r, 1000 * (i + 1))); 
+    }
     
-    if (!marketRes.ok) {
-        const errText = await marketRes.text();
-        console.error(`Failed to fetch markets: ${marketRes.status} ${marketRes.statusText}`);
+    if (!marketRes || !marketRes.ok) {
+        const errText = marketRes ? await marketRes.text() : "Request Timeout";
+        console.error(`Failed to fetch markets after ${maxRetries} attempts: ${marketRes?.status || '??'}`);
         console.error(`URL: ${apiUrl}/v1/markets?${urlParams}`);
-        console.error(`Response: ${errText}`);
         return "FAILED";
     }
 
